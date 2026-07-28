@@ -1,9 +1,27 @@
+import java.util.Properties
+
 plugins {
-    id("com.android.application")
-    id("org.jetbrains.kotlin.android")
-    id("org.jetbrains.kotlin.plugin.compose")
-    id("org.jetbrains.kotlin.kapt")
+    alias(libs.plugins.android.application)
+    alias(libs.plugins.kotlin.android)
+    alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.kotlin.kapt)
 }
+
+/**
+ * Loads a gitignored properties file. Returns an empty [Properties] when absent so that
+ * clean checkouts still build; callers decide whether a missing value is fatal.
+ */
+fun loadLocalProperties(fileName: String): Properties {
+    val properties = Properties()
+    val file = rootProject.file(fileName)
+    if (file.exists()) {
+        file.inputStream().use(properties::load)
+    }
+    return properties
+}
+
+val keystoreProperties = loadLocalProperties("keystore.properties")
+val hasReleaseKeystore = keystoreProperties.getProperty("storeFile") != null
 
 android {
     namespace = "com.attentionos"
@@ -23,6 +41,17 @@ android {
         }
     }
 
+    signingConfigs {
+        if (hasReleaseKeystore) {
+            create("release") {
+                storeFile = rootProject.file(keystoreProperties.getProperty("storeFile"))
+                storePassword = keystoreProperties.getProperty("storePassword")
+                keyAlias = keystoreProperties.getProperty("keyAlias")
+                keyPassword = keystoreProperties.getProperty("keyPassword")
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = true
@@ -31,6 +60,9 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
             )
+            if (hasReleaseKeystore) {
+                signingConfig = signingConfigs.getByName("release")
+            }
         }
     }
 
@@ -49,43 +81,48 @@ android {
         freeCompilerArgs += listOf("-Xjvm-default=all")
     }
 
+    androidResources {
+        // Keep the ONNX model uncompressed so it can be memory-mapped from the APK
+        // instead of being inflated into a second on-disk copy.
+        noCompress += "onnx"
+    }
+
     packaging {
         resources.excludes += "/META-INF/{AL2.0,LGPL2.1}"
     }
 }
 
 dependencies {
-    val composeBom = platform("androidx.compose:compose-bom:2025.05.01")
+    implementation(platform(libs.compose.bom))
+    androidTestImplementation(platform(libs.compose.bom))
 
-    implementation(composeBom)
-    androidTestImplementation(composeBom)
+    implementation(libs.androidx.core.ktx)
+    implementation(libs.androidx.activity.compose)
+    implementation(libs.androidx.lifecycle.runtime.ktx)
+    implementation(libs.androidx.lifecycle.runtime.compose)
+    implementation(libs.androidx.lifecycle.viewmodel.compose)
+    implementation(libs.compose.ui)
+    implementation(libs.compose.ui.tooling.preview)
+    implementation(libs.compose.foundation)
+    implementation(libs.compose.material3)
+    implementation(libs.compose.material.icons.core)
 
-    implementation("androidx.core:core-ktx:1.16.0")
-    implementation("androidx.activity:activity-compose:1.10.1")
-    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.9.0")
-    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.9.0")
-    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.9.0")
-    implementation("androidx.compose.ui:ui")
-    implementation("androidx.compose.ui:ui-tooling-preview")
-    implementation("androidx.compose.foundation:foundation")
-    implementation("androidx.compose.material3:material3")
-    implementation("androidx.compose.material:material-icons-core")
+    implementation(libs.androidx.room.runtime)
+    implementation(libs.androidx.room.ktx)
+    kapt(libs.androidx.room.compiler)
 
-    implementation("androidx.room:room-runtime:2.7.1")
-    implementation("androidx.room:room-ktx:2.7.1")
-    kapt("androidx.room:room-compiler:2.7.1")
+    implementation(libs.androidx.work.runtime.ktx)
+    implementation(libs.androidx.datastore.preferences)
+    implementation(libs.onnxruntime.android)
 
-    implementation("androidx.work:work-runtime-ktx:2.10.1")
-    implementation("androidx.datastore:datastore-preferences:1.1.7")
-    implementation("com.microsoft.onnxruntime:onnxruntime-android:1.27.0")
-
-    testImplementation("junit:junit:4.13.2")
-    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.10.2")
-    androidTestImplementation("androidx.test.ext:junit:1.2.1")
-    androidTestImplementation("androidx.test.espresso:espresso-core:3.6.1")
-    androidTestImplementation("androidx.compose.ui:ui-test-junit4")
-    debugImplementation("androidx.compose.ui:ui-tooling")
-    debugImplementation("androidx.compose.ui:ui-test-manifest")
+    testImplementation(libs.junit)
+    testImplementation(libs.kotlinx.coroutines.test)
+    androidTestImplementation(libs.androidx.test.ext.junit)
+    androidTestImplementation(libs.androidx.test.espresso.core)
+    androidTestImplementation(libs.androidx.room.testing)
+    androidTestImplementation(libs.compose.ui.test.junit4)
+    debugImplementation(libs.compose.ui.tooling)
+    debugImplementation(libs.compose.ui.test.manifest)
 }
 
 kapt {
