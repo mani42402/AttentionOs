@@ -118,9 +118,13 @@ R8 minification is enabled for release. SQLCipher and ONNX Runtime are both reac
 JNI, so their classes are kept explicitly in `proguard-rules.pro` — without that a release
 build can lose the database layer in a way that never shows up in debug.
 
-This has been verified to *build*, but a signed release has not been run on a device. Do that
-once before the first ship: install a signed release APK, confirm the database still opens and
-a notification is still classified.
+Verified on device: a minified release APK, signed and installed on an Android 16 emulator,
+loads `libsqlcipher.so`, provisions Keystore-backed keys, initialises the ONNX encoder, and
+records a notification into the encrypted database. R8 does not strip either native-backed
+layer.
+
+Repeat this check whenever the keep rules, R8 configuration, or either native dependency
+changes — a minification failure appears only in release, and only at runtime.
 
 ## Known gaps
 
