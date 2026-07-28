@@ -43,21 +43,23 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.unit.dp
+import com.attentionos.R
 import com.attentionos.ui.MainUiState
-import com.attentionos.ui.theme.Forest800
-import com.attentionos.ui.theme.Forest950
-import com.attentionos.ui.theme.Ice500
-import com.attentionos.ui.theme.Mint500
-import com.attentionos.ui.theme.Sun500
-import com.attentionos.ui.theme.Violet400
 import com.attentionos.ui.components.EmptyActivity
 import com.attentionos.ui.components.HelperLogo
 import com.attentionos.ui.components.OutcomeItem
 import com.attentionos.ui.components.SectionTitle
 import com.attentionos.ui.components.StatusBadge
 import com.attentionos.ui.review.EventRow
+import com.attentionos.ui.theme.Forest800
+import com.attentionos.ui.theme.Forest950
+import com.attentionos.ui.theme.Ice500
+import com.attentionos.ui.theme.Mint500
+import com.attentionos.ui.theme.Sun500
+import com.attentionos.ui.theme.Violet400
 
 @Composable
 internal fun DashboardScreen(
@@ -96,7 +98,7 @@ internal fun DashboardScreen(
         }
         item {
             SectionTitle(
-                title = "Recent notifications",
+                title = stringResource(R.string.home_recent_notifications),
                 action = "See all",
                 onAction = onSeeActivity,
                 modifier = Modifier.padding(start = 20.dp, end = 12.dp, top = 24.dp),
@@ -299,13 +301,13 @@ internal fun TodayOverviewCard(state: MainUiState) {
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 OutcomeItem(
                     value = state.importantToday,
-                    label = "needed attention",
+                    label = stringResource(R.string.home_needed_attention),
                     color = Sun500,
                     modifier = Modifier.weight(1f),
                 )
                 OutcomeItem(
                     value = state.queuedToday,
-                    label = "stayed quiet",
+                    label = stringResource(R.string.home_stayed_quiet),
                     color = Mint500,
                     modifier = Modifier.weight(1f),
                 )
@@ -327,7 +329,7 @@ internal fun PermissionCard(onOpen: () -> Unit) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Default.Notifications, contentDescription = null, tint = Forest800)
                 Spacer(Modifier.width(10.dp))
-                Text("Finish private setup", style = MaterialTheme.typography.titleMedium)
+                Text(stringResource(R.string.home_finish_private_setup), style = MaterialTheme.typography.titleMedium)
             }
             Spacer(Modifier.height(8.dp))
             Text(
@@ -339,7 +341,7 @@ internal fun PermissionCard(onOpen: () -> Unit) {
                 onClick = onOpen,
                 colors = ButtonDefaults.buttonColors(containerColor = Forest800),
             ) {
-                Text("Allow access")
+                Text(stringResource(R.string.home_allow_access))
                 Spacer(Modifier.width(4.dp))
                 Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null)
             }
@@ -384,7 +386,7 @@ internal fun ReviewNudgeCard(count: Int, onClick: () -> Unit) {
             }
             Spacer(Modifier.width(14.dp))
             Column(Modifier.weight(1f)) {
-                Text("Help it understand you", style = MaterialTheme.typography.titleMedium)
+                Text(stringResource(R.string.home_help_it_understand_you), style = MaterialTheme.typography.titleMedium)
                 Text(
                     "$count ${if (count == 1) "notification" else "notifications"} ready for a quick check",
                     style = MaterialTheme.typography.bodyMedium,

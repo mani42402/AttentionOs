@@ -1,5 +1,6 @@
 package com.attentionos.ui.review
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -45,7 +46,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -53,14 +53,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.attentionos.R
 import com.attentionos.data.db.NotificationListItem
 import com.attentionos.ui.MainUiState
-import com.attentionos.ui.theme.LocalMotionEnabled
-import com.attentionos.ui.theme.Mint500
-import com.attentionos.ui.theme.Violet400
 import com.attentionos.ui.components.AmbientBackdrop
 import com.attentionos.ui.components.BrandMark
 import com.attentionos.ui.components.EmptyActivity
@@ -68,6 +67,9 @@ import com.attentionos.ui.components.PriorityPill
 import com.attentionos.ui.components.ScreenHeader
 import com.attentionos.ui.components.formatEventTime
 import com.attentionos.ui.components.priorityColor
+import com.attentionos.ui.theme.LocalMotionEnabled
+import com.attentionos.ui.theme.Mint500
+import com.attentionos.ui.theme.Violet400
 
 internal enum class ActivityFilter(val label: String) {
     ALL("All"),
@@ -126,9 +128,9 @@ internal fun ActivityScreen(
     ) {
         item {
             ScreenHeader(
-                eyebrow = "YOUR NOTIFICATIONS",
-                title = "Review",
-                description = "See how notifications were handled and correct anything that feels wrong.",
+                eyebrow = stringResource(R.string.review_your_notifications),
+                title = stringResource(R.string.review_review),
+                description = stringResource(R.string.review_see_how_notifications_were_handled_and_correct),
             )
             Row(
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 16.dp),
@@ -157,14 +159,14 @@ internal fun ActivityScreen(
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Column(Modifier.weight(1f)) {
-                            Text("Quick review", style = MaterialTheme.typography.titleMedium)
+                            Text(stringResource(R.string.review_quick_review), style = MaterialTheme.typography.titleMedium)
                             val decisionCount = state.unreviewedEvents.size
                             Text(
                                 "$decisionCount ${if (decisionCount == 1) "decision" else "decisions"} ready for feedback",
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
-                        Button(onClick = { reviewing = true }) { Text("Review") }
+                        Button(onClick = { reviewing = true }) { Text(stringResource(R.string.review_review)) }
                     }
                 }
                 Spacer(Modifier.height(10.dp))
@@ -221,9 +223,9 @@ internal fun ModernReviewSession(
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.primary,
                     )
-                    Text("Teach what matters", style = MaterialTheme.typography.headlineMedium)
+                    Text(stringResource(R.string.review_teach_what_matters), style = MaterialTheme.typography.headlineMedium)
                 }
-                TextButton(onClick = onDone) { Text("Close") }
+                TextButton(onClick = onDone) { Text(stringResource(R.string.review_close)) }
             }
             Spacer(Modifier.height(20.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -291,7 +293,7 @@ internal fun ModernReviewSession(
                                 )
                             }
                             Spacer(Modifier.height(18.dp))
-                            Text("You’re all caught up", style = MaterialTheme.typography.headlineMedium)
+                            Text(stringResource(R.string.review_youre_all_caught_up), style = MaterialTheme.typography.headlineMedium)
                             Spacer(Modifier.height(7.dp))
                             Text(
                                 "There are no more notifications waiting for feedback.",
@@ -313,20 +315,20 @@ internal fun ModernReviewSession(
                         .height(56.dp),
                     shape = RoundedCornerShape(18.dp),
                 ) {
-                    Text("Return to activity")
+                    Text(stringResource(R.string.review_return_to_activity))
                 }
             } else {
                 DecisionButton(
-                    label = "This matters",
-                    subtitle = "Remember this as important",
+                    label = stringResource(R.string.review_this_matters),
+                    subtitle = stringResource(R.string.review_remember_this_as_important),
                     accent = Violet400,
                     filled = true,
                     onClick = { onImportant(event) },
                 )
                 Spacer(Modifier.height(10.dp))
                 DecisionButton(
-                    label = "This can wait",
-                    subtitle = "Remember that this can wait",
+                    label = stringResource(R.string.review_this_can_wait),
+                    subtitle = stringResource(R.string.review_remember_that_this_can_wait),
                     accent = Mint500,
                     filled = false,
                     onClick = { onNotImportant(event) },
@@ -335,7 +337,7 @@ internal fun ModernReviewSession(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.Center,
                 ) {
-                    TextButton(onClick = { onSkip(event) }) { Text("Skip this one") }
+                    TextButton(onClick = { onSkip(event) }) { Text(stringResource(R.string.review_skip_this_one)) }
                 }
             }
         }
@@ -559,11 +561,11 @@ internal fun EventRow(
                             TextButton(
                                 onClick = { onFeedback(event.notificationKey, true) },
                                 contentPadding = PaddingValues(horizontal = 8.dp),
-                            ) { Text("Important") }
+                            ) { Text(stringResource(R.string.review_important)) }
                             TextButton(
                                 onClick = { onFeedback(event.notificationKey, false) },
                                 contentPadding = PaddingValues(horizontal = 8.dp),
-                            ) { Text("Not important") }
+                            ) { Text(stringResource(R.string.review_not_important)) }
                         }
                     } else if (event.action == "IMPORTANT" || event.action == "NOT_IMPORTANT") {
                         Text(

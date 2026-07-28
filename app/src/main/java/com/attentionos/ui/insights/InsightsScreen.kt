@@ -36,16 +36,18 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.attentionos.R
 import com.attentionos.ui.MainUiState
-import com.attentionos.ui.theme.Ice500
-import com.attentionos.ui.theme.Mint500
-import com.attentionos.ui.theme.Sun500
 import com.attentionos.ui.components.ScreenHeader
 import com.attentionos.ui.components.SettingIcon
 import com.attentionos.ui.components.SoftDivider
 import com.attentionos.ui.home.ReviewNudgeCard
 import com.attentionos.ui.home.TodayOverviewCard
+import com.attentionos.ui.theme.Ice500
+import com.attentionos.ui.theme.Mint500
+import com.attentionos.ui.theme.Sun500
 
 @Composable
 internal fun SimpleSummaryScreen(
@@ -62,9 +64,9 @@ internal fun SimpleSummaryScreen(
     ) {
         item {
             ScreenHeader(
-                eyebrow = "YOUR HELPER",
-                title = "Summary",
-                description = "Only the useful parts—what was handled and what you can improve.",
+                eyebrow = stringResource(R.string.insights_your_helper),
+                title = stringResource(R.string.insights_summary),
+                description = stringResource(R.string.insights_only_the_useful_parts_what_was_handled),
             )
         }
         item { TodayOverviewCard(state) }
@@ -94,7 +96,7 @@ internal fun SimpleSummaryScreen(
                     SettingIcon(Icons.Default.Lock, Mint500)
                     Spacer(Modifier.width(12.dp))
                     Column {
-                        Text("Important alerts stay protected", style = MaterialTheme.typography.titleMedium)
+                        Text(stringResource(R.string.insights_important_alerts_stay_protected), style = MaterialTheme.typography.titleMedium)
                         Text(
                             "Security, financial, calls, alarms, and urgent incidents always keep a high-priority safety floor.",
                             style = MaterialTheme.typography.bodyMedium,
@@ -215,19 +217,19 @@ internal fun ControlStatusCard(
             }
             Spacer(Modifier.height(8.dp))
             StatusLine(
-                title = "Notification access",
+                title = stringResource(R.string.insights_notification_access),
                 value = if (hasAccess) "Connected" else "Not connected",
                 positive = hasAccess,
             )
             SoftDivider()
             StatusLine(
-                title = "Attention Mode",
+                title = stringResource(R.string.insights_attention_mode),
                 value = if (state.settings.focusMode) "On" else "Off",
                 positive = state.settings.focusMode,
             )
             SoftDivider()
             StatusLine(
-                title = "Personalization",
+                title = stringResource(R.string.insights_personalization),
                 value = when {
                     !state.settings.learningEnabled -> "Paused"
                     state.personalModelActive -> "Personalized"

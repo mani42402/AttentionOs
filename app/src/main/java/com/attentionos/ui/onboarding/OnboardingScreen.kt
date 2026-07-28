@@ -60,15 +60,11 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.unit.dp
+import com.attentionos.R
 import com.attentionos.ui.MainUiState
-import com.attentionos.ui.theme.Forest950
-import com.attentionos.ui.theme.Ice500
-import com.attentionos.ui.theme.LocalMotionEnabled
-import com.attentionos.ui.theme.Mint500
-import com.attentionos.ui.theme.Sun500
-import com.attentionos.ui.theme.Violet400
 import com.attentionos.ui.components.ElevatedPanel
 import com.attentionos.ui.components.HelperLogo
 import com.attentionos.ui.components.PriorityPill
@@ -79,6 +75,12 @@ import com.attentionos.ui.components.priorityColor
 import com.attentionos.ui.components.readableUiName
 import com.attentionos.ui.components.rememberNotificationAccess
 import com.attentionos.ui.settings.InterruptionPriorityRow
+import com.attentionos.ui.theme.Forest950
+import com.attentionos.ui.theme.Ice500
+import com.attentionos.ui.theme.LocalMotionEnabled
+import com.attentionos.ui.theme.Mint500
+import com.attentionos.ui.theme.Sun500
+import com.attentionos.ui.theme.Violet400
 
 @Composable
 internal fun OnboardingScreen(
@@ -206,8 +208,8 @@ internal fun OnboardingScreen(
                             2 -> {
                                 FeatureToggleCard(
                                     icon = Icons.Default.Lock,
-                                    title = "Attention Mode",
-                                    subtitle = "Your helper manages which priorities may interrupt",
+                                    title = stringResource(R.string.insights_attention_mode),
+                                    subtitle = stringResource(R.string.onboarding_your_helper_manages_which_priorities_may_interrupt),
                                     checked = state.settings.focusMode,
                                     accent = Violet400,
                                     onCheckedChange = onFocusChanged,
@@ -221,8 +223,8 @@ internal fun OnboardingScreen(
                                 )
                                 FeatureToggleCard(
                                     icon = Icons.Default.Notifications,
-                                    title = "Quiet review reminders",
-                                    subtitle = "Choose any time, up to six times daily, in Settings",
+                                    title = stringResource(R.string.onboarding_quiet_review_reminders),
+                                    subtitle = stringResource(R.string.onboarding_choose_any_time_up_to_six_times),
                                     checked = state.settings.reviewReminderEnabled,
                                     accent = Mint500,
                                     onCheckedChange = {
@@ -247,7 +249,7 @@ internal fun OnboardingScreen(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     if (step > 0) {
-                        TextButton(onClick = { step-- }) { Text("Back") }
+                        TextButton(onClick = { step-- }) { Text(stringResource(R.string.onboarding_back)) }
                     }
                     Button(
                         onClick = {
@@ -334,20 +336,20 @@ internal fun FeatureOverviewPanel() {
     ElevatedPanel {
         OnboardingFeature(
             number = "1",
-            title = "Everything remains visible",
-            description = "Quiet means no sound or vibration—not deleted, hidden, or blocked.",
+            title = stringResource(R.string.onboarding_everything_remains_visible),
+            description = stringResource(R.string.onboarding_quiet_means_no_sound_or_vibration_not),
         )
         SoftDivider()
         OnboardingFeature(
             number = "2",
-            title = "Important alerts can reach you",
-            description = "You choose which priorities may make sound or vibrate.",
+            title = stringResource(R.string.onboarding_important_alerts_can_reach_you),
+            description = stringResource(R.string.onboarding_you_choose_which_priorities_may_make_sound),
         )
         SoftDivider()
         OnboardingFeature(
             number = "3",
-            title = "It adapts to your choices",
-            description = "Short Important or Can wait reviews build your private preferences.",
+            title = stringResource(R.string.onboarding_it_adapts_to_your_choices),
+            description = stringResource(R.string.onboarding_short_important_or_can_wait_reviews_build),
         )
     }
 }
@@ -411,7 +413,7 @@ internal fun NotificationDemoCard(
                 )
                 Spacer(Modifier.width(10.dp))
                 Column {
-                    Text("Demo hint", style = MaterialTheme.typography.titleMedium)
+                    Text(stringResource(R.string.onboarding_demo_hint), style = MaterialTheme.typography.titleMedium)
                     Text(
                         "Imagine this just arrived. Choose how you would want your phone to behave.",
                         style = MaterialTheme.typography.bodyMedium,
@@ -441,7 +443,7 @@ internal fun NotificationDemoCard(
                     }
                     Spacer(Modifier.width(12.dp))
                     Column(Modifier.weight(1f)) {
-                        Text("Messages · Maya", style = MaterialTheme.typography.titleMedium)
+                        Text(stringResource(R.string.onboarding_messages_maya), style = MaterialTheme.typography.titleMedium)
                         Text(
                             "just now",
                             style = MaterialTheme.typography.bodyMedium,
@@ -465,7 +467,7 @@ internal fun NotificationDemoCard(
                     ),
                     shape = RoundedCornerShape(15.dp),
                 ) {
-                    Text("Notify me")
+                    Text(stringResource(R.string.onboarding_notify_me))
                 }
                 Spacer(Modifier.height(8.dp))
                 OutlinedButton(
@@ -473,7 +475,7 @@ internal fun NotificationDemoCard(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(15.dp),
                 ) {
-                    Text("Keep it quiet")
+                    Text(stringResource(R.string.onboarding_keep_it_quiet))
                 }
             }
         }
@@ -622,7 +624,7 @@ internal fun InterruptionSetupCard(
         )
         InterruptionPriorityRow(
             priority = "Critical",
-            description = "Security, safety and immediate action",
+            description = stringResource(R.string.settings_security_safety_and_immediate_action),
             sound = state.settings.criticalSound,
             vibration = state.settings.criticalVibration,
             onSoundChanged = onCriticalSoundChanged,
@@ -631,7 +633,7 @@ internal fun InterruptionSetupCard(
         SoftDivider()
         InterruptionPriorityRow(
             priority = "High",
-            description = "Important and time-sensitive",
+            description = stringResource(R.string.settings_important_and_time_sensitive),
             sound = state.settings.highSound,
             vibration = state.settings.highVibration,
             onSoundChanged = onHighSoundChanged,
@@ -651,7 +653,7 @@ internal fun SafetyTestPanel(
                 SettingIcon(Icons.Default.Star, Violet400)
                 Spacer(Modifier.width(12.dp))
                 Column {
-                    Text("Notification safety check", style = MaterialTheme.typography.titleLarge)
+                    Text(stringResource(R.string.onboarding_notification_safety_check), style = MaterialTheme.typography.titleLarge)
                     Text(
                         "Runs privately · posts nothing",
                         style = MaterialTheme.typography.bodyMedium,

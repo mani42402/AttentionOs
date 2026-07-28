@@ -47,18 +47,20 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.attentionos.R
 import com.attentionos.core.common.TimeConstants
 import com.attentionos.ui.MainUiState
-import com.attentionos.ui.theme.Coral500
-import com.attentionos.ui.theme.Mint500
-import com.attentionos.ui.theme.Sun500
 import com.attentionos.ui.components.ActionSettingRow
 import com.attentionos.ui.components.ScreenHeader
 import com.attentionos.ui.components.SettingsGroup
 import com.attentionos.ui.components.SoftDivider
 import com.attentionos.ui.components.ToggleSettingRow
 import com.attentionos.ui.insights.ControlStatusCard
+import com.attentionos.ui.theme.Coral500
+import com.attentionos.ui.theme.Mint500
+import com.attentionos.ui.theme.Sun500
 
 @Composable
 internal fun SettingsScreen(
@@ -100,9 +102,9 @@ internal fun SettingsScreen(
     ) {
         item {
             ScreenHeader(
-                eyebrow = "CONTROL CENTER",
-                title = "Settings",
-                description = "Every behavior, clearly under your control.",
+                eyebrow = stringResource(R.string.settings_control_center),
+                title = stringResource(R.string.settings_settings),
+                description = stringResource(R.string.settings_every_behavior_clearly_under_your_control),
                 horizontalPadding = 4.dp,
             )
         }
@@ -113,10 +115,10 @@ internal fun SettingsScreen(
             )
         }
         item {
-            SettingsGroup(title = "Core behavior") {
+            SettingsGroup(title = stringResource(R.string.settings_core_behavior)) {
                 ToggleSettingRow(
                     icon = Icons.Default.Lock,
-                    title = "Attention Mode",
+                    title = stringResource(R.string.insights_attention_mode),
                     subtitle = if (state.settings.focusMode) {
                         "Your helper manages sound and vibration; nothing is hidden"
                     } else {
@@ -128,10 +130,10 @@ internal fun SettingsScreen(
             }
         }
         item {
-            SettingsGroup(title = "Access") {
+            SettingsGroup(title = stringResource(R.string.settings_access)) {
                 ActionSettingRow(
                     icon = Icons.Default.Notifications,
-                    title = "Notification access",
+                    title = stringResource(R.string.insights_notification_access),
                     subtitle = if (hasAccess) "Active" else "Required for classification",
                     valueColor = if (hasAccess) Mint500 else Sun500,
                     onClick = onOpenNotificationAccess,
@@ -139,17 +141,17 @@ internal fun SettingsScreen(
                 SoftDivider()
                 ActionSettingRow(
                     icon = Icons.Default.Info,
-                    title = "Replay guided setup",
-                    subtitle = "Review guarantees, controls, and the safety test",
+                    title = stringResource(R.string.settings_replay_guided_setup),
+                    subtitle = stringResource(R.string.settings_review_guarantees_controls_and_the_safety_test),
                     onClick = onReplayOnboarding,
                 )
             }
         }
         item {
-            SettingsGroup(title = "Interruption behavior") {
+            SettingsGroup(title = stringResource(R.string.settings_interruption_behavior)) {
                 InterruptionPriorityRow(
                     priority = "Critical",
-                    description = "Security, safety and immediate action",
+                    description = stringResource(R.string.settings_security_safety_and_immediate_action),
                     sound = state.settings.criticalSound,
                     vibration = state.settings.criticalVibration,
                     onSoundChanged = onCriticalSoundChanged,
@@ -158,7 +160,7 @@ internal fun SettingsScreen(
                 HorizontalDivider()
                 InterruptionPriorityRow(
                     priority = "High",
-                    description = "Important and time-sensitive",
+                    description = stringResource(R.string.settings_important_and_time_sensitive),
                     sound = state.settings.highSound,
                     vibration = state.settings.highVibration,
                     onSoundChanged = onHighSoundChanged,
@@ -167,7 +169,7 @@ internal fun SettingsScreen(
                 HorizontalDivider()
                 InterruptionPriorityRow(
                     priority = "Medium",
-                    description = "Useful, but usually able to wait",
+                    description = stringResource(R.string.settings_useful_but_usually_able_to_wait),
                     sound = state.settings.mediumSound,
                     vibration = state.settings.mediumVibration,
                     onSoundChanged = onMediumSoundChanged,
@@ -182,18 +184,18 @@ internal fun SettingsScreen(
             }
         }
         item {
-            SettingsGroup(title = "Privacy & learning") {
+            SettingsGroup(title = stringResource(R.string.settings_privacy_learning)) {
                 ToggleSettingRow(
                     icon = Icons.Default.Star,
-                    title = "Local learning",
-                    subtitle = "Remember what you mark Important or Can wait",
+                    title = stringResource(R.string.settings_local_learning),
+                    subtitle = stringResource(R.string.settings_remember_what_you_mark_important_or_can),
                     checked = state.settings.learningEnabled,
                     onCheckedChange = onLearningChanged,
                 )
                 HorizontalDivider()
                 ToggleSettingRow(
                     icon = Icons.Default.Lock,
-                    title = "Store message content",
+                    title = stringResource(R.string.settings_store_message_content),
                     subtitle = if (state.settings.storeContent) {
                         "Raw title and text stay in the local database"
                     } else {
@@ -205,7 +207,7 @@ internal fun SettingsScreen(
                 HorizontalDivider()
                 ActionSettingRow(
                     icon = Icons.Default.Delete,
-                    title = "Reset personalization",
+                    title = stringResource(R.string.settings_reset_personalization),
                     subtitle = if (state.personalizedModel.exampleCount == 0) {
                         "No preferences learned yet"
                     } else {
@@ -217,10 +219,10 @@ internal fun SettingsScreen(
             }
         }
         item {
-            SettingsGroup(title = "Appearance & effects") {
+            SettingsGroup(title = stringResource(R.string.settings_appearance_effects)) {
                 ToggleSettingRow(
                     icon = Icons.Default.Star,
-                    title = "Dark appearance",
+                    title = stringResource(R.string.settings_dark_appearance),
                     subtitle = if (state.settings.darkTheme) {
                         "Midnight theme is active"
                     } else {
@@ -232,7 +234,7 @@ internal fun SettingsScreen(
                 SoftDivider()
                 ToggleSettingRow(
                     icon = Icons.Default.CheckCircle,
-                    title = "Motion effects",
+                    title = stringResource(R.string.settings_motion_effects),
                     subtitle = if (state.settings.motionEnabled) {
                         "Smooth transitions, graphs, and status effects"
                     } else {
@@ -244,10 +246,10 @@ internal fun SettingsScreen(
             }
         }
         item {
-            SettingsGroup(title = "Review reminders") {
+            SettingsGroup(title = stringResource(R.string.settings_review_reminders)) {
                 ToggleSettingRow(
                     icon = Icons.Default.Notifications,
-                    title = "Daily review reminders",
+                    title = stringResource(R.string.settings_daily_review_reminders),
                     subtitle = if (state.settings.reviewReminderEnabled) {
                         val count = state.settings.reviewReminderTimes.size
                         "$count quiet ${if (count == 1) "reminder" else "reminders"} each day"
@@ -270,7 +272,7 @@ internal fun SettingsScreen(
             }
         }
         item {
-            SettingsGroup(title = "Data retention") {
+            SettingsGroup(title = stringResource(R.string.settings_data_retention)) {
                 Column(Modifier.padding(16.dp)) {
                     Text(
                         "Automatically delete decision history",
@@ -290,18 +292,18 @@ internal fun SettingsScreen(
             }
         }
         item {
-            SettingsGroup(title = "Your data") {
+            SettingsGroup(title = stringResource(R.string.settings_your_data)) {
                 ActionSettingRow(
                     icon = Icons.Default.Share,
-                    title = "Export learning data",
-                    subtitle = "JSON Lines, with hashed sender identities",
+                    title = stringResource(R.string.settings_export_learning_data),
+                    subtitle = stringResource(R.string.settings_json_lines_with_hashed_sender_identities),
                     onClick = onExport,
                 )
                 HorizontalDivider()
                 ActionSettingRow(
                     icon = Icons.Default.Delete,
-                    title = "Delete all local data",
-                    subtitle = "Decisions, memory, and training examples",
+                    title = stringResource(R.string.settings_delete_all_local_data),
+                    subtitle = stringResource(R.string.settings_decisions_memory_and_training_examples),
                     valueColor = Coral500,
                     onClick = { showDeleteDialog = true },
                 )
@@ -322,7 +324,7 @@ internal fun SettingsScreen(
     if (showDeleteDialog) {
         AlertDialog(
             onDismissRequest = { showDeleteDialog = false },
-            title = { Text("Delete all local data?") },
+            title = { Text(stringResource(R.string.settings_delete_all_local_data_2)) },
             text = {
                 Text(
                     "This permanently removes your decision history, learned sender memory, and training examples. Settings stay unchanged.",
@@ -335,11 +337,11 @@ internal fun SettingsScreen(
                         onDelete()
                     },
                 ) {
-                    Text("Delete", color = MaterialTheme.colorScheme.error)
+                    Text(stringResource(R.string.settings_delete), color = MaterialTheme.colorScheme.error)
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showDeleteDialog = false }) { Text("Cancel") }
+                TextButton(onClick = { showDeleteDialog = false }) { Text(stringResource(R.string.settings_cancel)) }
             },
         )
     }
@@ -347,7 +349,7 @@ internal fun SettingsScreen(
     if (showResetModelDialog) {
         AlertDialog(
             onDismissRequest = { showResetModelDialog = false },
-            title = { Text("Reset personalization?") },
+            title = { Text(stringResource(R.string.settings_reset_personalization_2)) },
             text = {
                 Text(
                     "This clears only your personalized preferences and progress. " +
@@ -361,11 +363,11 @@ internal fun SettingsScreen(
                         onResetPersonalizedModel()
                     },
                 ) {
-                    Text("Reset", color = MaterialTheme.colorScheme.error)
+                    Text(stringResource(R.string.settings_reset), color = MaterialTheme.colorScheme.error)
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showResetModelDialog = false }) { Text("Cancel") }
+                TextButton(onClick = { showResetModelDialog = false }) { Text(stringResource(R.string.settings_cancel)) }
             },
         )
     }
@@ -386,7 +388,7 @@ internal fun ReminderScheduleEditor(
     Column(Modifier.padding(16.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
-                Text("Reminder schedule", style = MaterialTheme.typography.titleMedium)
+                Text(stringResource(R.string.settings_reminder_schedule), style = MaterialTheme.typography.titleMedium)
                 Text(
                     "Choose any time · up to 6 quiet reminders daily",
                     style = MaterialTheme.typography.bodyMedium,
@@ -433,7 +435,7 @@ internal fun ReminderScheduleEditor(
                         onClick = { onTimesChanged(times - minuteOfDay) },
                         enabled = times.size > 1,
                     ) {
-                        Text("Remove")
+                        Text(stringResource(R.string.settings_remove))
                     }
                 }
             }
@@ -452,7 +454,7 @@ internal fun ReminderScheduleEditor(
     if (showPicker) {
         AlertDialog(
             onDismissRequest = { showPicker = false },
-            title = { Text("Add reminder time") },
+            title = { Text(stringResource(R.string.settings_add_reminder_time)) },
             text = { TimePicker(state = pickerState) },
             confirmButton = {
                 TextButton(
@@ -462,11 +464,11 @@ internal fun ReminderScheduleEditor(
                         showPicker = false
                     },
                 ) {
-                    Text("Add")
+                    Text(stringResource(R.string.settings_add))
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showPicker = false }) { Text("Cancel") }
+                TextButton(onClick = { showPicker = false }) { Text(stringResource(R.string.settings_cancel)) }
             },
         )
     }
