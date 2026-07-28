@@ -6,7 +6,7 @@ import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import android.util.LruCache
 import com.attentionos.AttentionApplication
-import com.attentionos.data.UserAction
+import com.attentionos.data.repository.UserAction
 import com.attentionos.domain.NotificationSignal
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers

@@ -1,4 +1,4 @@
-package com.attentionos.presentation.theme
+package com.attentionos.ui.theme
 
 import androidx.compose.ui.graphics.Color
 

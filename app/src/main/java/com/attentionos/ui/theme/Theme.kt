@@ -1,4 +1,4 @@
-package com.attentionos.presentation.theme
+package com.attentionos.ui.theme
 
 import android.app.Activity
 import androidx.compose.foundation.isSystemInDarkTheme

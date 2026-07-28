@@ -1,4 +1,4 @@
-package com.attentionos.data
+package com.attentionos.data.settings
 
 import com.attentionos.core.common.TimeConstants
 import android.content.Context

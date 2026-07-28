@@ -1,13 +1,14 @@
-package com.attentionos.data
+package com.attentionos.data.repository
 
 import android.util.Log
 import com.attentionos.BuildConfig
 import com.attentionos.core.common.TimeConstants
-import com.attentionos.data.local.AttentionDao
-import com.attentionos.data.local.NotificationEventEntity
-import com.attentionos.data.local.PersonalizedModelEntity
-import com.attentionos.data.local.TrainingExampleEntity
-import com.attentionos.data.local.UserMemoryEntity
+import com.attentionos.data.db.AttentionDao
+import com.attentionos.data.db.NotificationEventEntity
+import com.attentionos.data.db.PersonalizedModelEntity
+import com.attentionos.data.db.TrainingExampleEntity
+import com.attentionos.data.db.UserMemoryEntity
+import com.attentionos.data.settings.AppSettings
 import com.attentionos.domain.AttentionContext
 import com.attentionos.domain.AttentionDecision
 import com.attentionos.domain.AttentionPolicy

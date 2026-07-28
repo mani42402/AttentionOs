@@ -1,14 +1,14 @@
-package com.attentionos.presentation
+package com.attentionos.ui
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
-import com.attentionos.AppContainer
 import com.attentionos.core.common.TimeConstants
-import com.attentionos.data.AppSettings
-import com.attentionos.data.AttentionTestResult
-import com.attentionos.data.UserAction
-import com.attentionos.data.local.NotificationEventEntity
+import com.attentionos.core.di.AppContainer
+import com.attentionos.data.settings.AppSettings
+import com.attentionos.data.repository.AttentionTestResult
+import com.attentionos.data.repository.UserAction
+import com.attentionos.data.db.NotificationEventEntity
 import com.attentionos.training.ExportResult
 import com.attentionos.training.PersonalizedModelProgress
 import java.time.LocalDate

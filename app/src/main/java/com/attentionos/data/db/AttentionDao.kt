@@ -1,4 +1,4 @@
-package com.attentionos.data.local
+package com.attentionos.data.db
 
 import androidx.room.Dao
 import androidx.room.Insert

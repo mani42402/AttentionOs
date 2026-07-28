@@ -1,4 +1,4 @@
-package com.attentionos.data.local
+package com.attentionos.data.db
 
 import androidx.room.Entity
 import androidx.room.Index
