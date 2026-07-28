@@ -120,6 +120,7 @@ dependencies {
     implementation(libs.androidx.work.runtime.ktx)
     implementation(libs.androidx.datastore.preferences)
     implementation(libs.onnxruntime.android)
+    implementation(libs.sqlcipher.android)
 
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
