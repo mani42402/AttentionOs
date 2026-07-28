@@ -52,7 +52,7 @@ internal enum class AppDestination(
 ) {
     TODAY("Home", "home"),
     ACTIVITY("Review", "review"),
-    INSIGHTS("Summary", "insights"),
+    INSIGHTS("Insights", "insights"),
     SETTINGS("Settings", "settings"),
     ;
 
