@@ -7,6 +7,7 @@ import com.attentionos.data.db.AttentionDatabase
 import com.attentionos.data.repository.AttentionRepository
 import com.attentionos.data.settings.AppSettings
 import com.attentionos.data.settings.SettingsRepository
+import com.attentionos.domain.PanicWipe
 import com.attentionos.domain.PriorityEngine
 import com.attentionos.security.DatabaseEncryptionMigrator
 import com.attentionos.security.KeyManager
@@ -106,6 +107,15 @@ class AppContainer(
 
     val exportManager: ExportManager by lazy {
         ExportManager(application, attentionRepository)
+    }
+
+    val panicWipe: PanicWipe by lazy {
+        PanicWipe(
+            context = application,
+            repository = attentionRepository,
+            keyManager = keyManager,
+            onSettingsCleared = settingsRepository::clearAll,
+        )
     }
 
     fun warmLanguageModel() {

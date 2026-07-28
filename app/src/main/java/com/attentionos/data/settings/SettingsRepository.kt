@@ -113,6 +113,11 @@ class SettingsRepository(private val context: Context) {
         context.settingsDataStore.edit { it[RETENTION_DAYS] = days.coerceIn(1, 90) }
     }
 
+    /** Removes every stored preference. Used by the full-wipe path. */
+    suspend fun clearAll() {
+        context.settingsDataStore.edit { it.clear() }
+    }
+
     private suspend fun update(key: Preferences.Key<Boolean>, value: Boolean) {
         context.settingsDataStore.edit { it[key] = value }
     }

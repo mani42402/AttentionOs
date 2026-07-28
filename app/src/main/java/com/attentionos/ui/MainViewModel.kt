@@ -264,7 +264,7 @@ class MainViewModel(private val container: AppContainer) : ViewModel() {
 
     fun deleteAllData() {
         viewModelScope.launch(Dispatchers.IO) {
-            container.attentionRepository.deleteAllUserData()
+            container.panicWipe()
             events.emit(UiEvent.DataDeleted)
         }
     }
