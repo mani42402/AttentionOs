@@ -52,7 +52,6 @@ import com.attentionos.ui.onboarding.OnboardingScreen
 import com.attentionos.ui.review.ActivityScreen
 import com.attentionos.ui.settings.SettingsScreen
 import com.attentionos.ui.theme.AttentionTheme
-import com.attentionos.ui.theme.Forest950
 import com.attentionos.ui.theme.ThemeMode
 import kotlinx.coroutines.flow.MutableStateFlow
 
@@ -305,13 +304,6 @@ private fun AttentionApp(
                         storage = storage,
                     )
                 },
-            )
-            // Android 15+ enforces edge-to-edge. Keep status icons readable on every tab.
-            Spacer(
-                Modifier
-                    .fillMaxWidth()
-                    .height(WindowInsets.statusBars.asPaddingValues().calculateTopPadding())
-                    .background(Forest950),
             )
         }
     }

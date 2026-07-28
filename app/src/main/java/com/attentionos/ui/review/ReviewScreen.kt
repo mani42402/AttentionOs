@@ -2,42 +2,31 @@ package com.attentionos.ui.review
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.core.tween
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBars
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilterChip
-import androidx.compose.material3.Icon
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -51,32 +40,54 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.customActions
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import com.attentionos.R
 import com.attentionos.data.db.NotificationListItem
+import com.attentionos.domain.AttentionPriority
 import com.attentionos.ui.MainUiState
-import com.attentionos.ui.components.AmbientBackdrop
-import com.attentionos.ui.components.BrandMark
-import com.attentionos.ui.components.EmptyActivity
-import com.attentionos.ui.components.PriorityPill
-import com.attentionos.ui.components.ScreenHeader
-import com.attentionos.ui.components.formatEventTime
-import com.attentionos.ui.components.priorityColor
-import com.attentionos.ui.theme.LocalMotionEnabled
-import com.attentionos.ui.theme.Mint500
-import com.attentionos.ui.theme.Violet400
+import com.attentionos.ui.components.AttentionCard
+import com.attentionos.ui.components.CalmMark
+import com.attentionos.ui.components.EmptyState
+import com.attentionos.ui.components.HSpace
+import com.attentionos.ui.components.PriorityChip
+import com.attentionos.ui.components.VSpace
+import com.attentionos.ui.components.accentForPriorityName
+import com.attentionos.ui.home.NotificationRow
+import com.attentionos.ui.theme.AttentionTheme
+import com.attentionos.ui.theme.Motion
+import com.attentionos.ui.theme.PriorityColors
+import com.attentionos.ui.theme.Radius
+import com.attentionos.ui.theme.Spacing
+import com.attentionos.ui.theme.ThemeMode
+import com.attentionos.ui.theme.motionEnabled
+import com.attentionos.ui.theme.rememberHaptics
+import kotlin.math.abs
+import kotlin.math.roundToInt
+import kotlinx.coroutines.delay
 
-internal enum class ActivityFilter(val label: String) {
-    ALL("All"),
-    IMPORTANT("Important"),
-    QUEUED("Quiet"),
-}
-
+/**
+ * Review.
+ *
+ * The core loop of the app: judge a notification, teach the model. The previous version made
+ * that two stacked buttons — functional, but it made the most-repeated interaction in the
+ * product feel like filling in a form.
+ *
+ * It is now a swipeable card. Right means important, left means it can wait, and the card tracks
+ * the finger with colour and rotation so the outcome is obvious before releasing. The buttons
+ * stay, because a gesture nobody discovers is not a feature — and because swiping alone is not
+ * accessible, the card also exposes explicit accessibility actions.
+ */
 @Composable
 internal fun ActivityScreen(
     state: MainUiState,
@@ -85,503 +96,454 @@ internal fun ActivityScreen(
 ) {
     var filter by rememberSaveable { mutableStateOf(ActivityFilter.ALL) }
     var reviewing by rememberSaveable { mutableStateOf(false) }
-    // Saveable: rotating mid-session used to replay notifications already reviewed.
-    var skippedIds by rememberSaveable { mutableStateOf(emptySet<Long>()) }
+    var judgedIds by rememberSaveable { mutableStateOf(emptySet<Long>()) }
+
     LaunchedEffect(reviewRequest) {
         if (reviewRequest > 0) reviewing = true
     }
-    val reviewEvents = state.unreviewedEvents.filterNot { it.id in skippedIds }
-    // The session is a full-screen takeover, so back should leave it rather than exit the app.
+
+    val queue = state.unreviewedEvents.filterNot { it.id in judgedIds }
+
     BackHandler(enabled = reviewing) { reviewing = false }
+
     if (reviewing) {
-        ModernReviewSession(
-            event = reviewEvents.firstOrNull(),
-            reviewedCount = skippedIds.size,
-            remainingToGoal = (50 - state.personalizedModel.exampleCount).coerceAtLeast(0),
-            onImportant = { event ->
-                skippedIds = skippedIds + event.id
-                onFeedback(event.notificationKey, true)
+        ReviewSession(
+            event = queue.firstOrNull(),
+            judged = judgedIds.size,
+            onDecide = { event, important ->
+                judgedIds = judgedIds + event.id
+                onFeedback(event.notificationKey, important)
             },
-            onNotImportant = { event ->
-                skippedIds = skippedIds + event.id
-                onFeedback(event.notificationKey, false)
-            },
-            onSkip = { event -> skippedIds = skippedIds + event.id },
-            onDone = { reviewing = false },
+            onSkip = { event -> judgedIds = judgedIds + event.id },
+            onClose = { reviewing = false },
         )
         return
     }
-    val displayedEvents = when (filter) {
+
+    val visible = when (filter) {
         ActivityFilter.ALL -> state.events
         ActivityFilter.IMPORTANT -> state.events.filter {
-            it.priority == "CRITICAL" || it.priority == "HIGH"
+            it.priority == AttentionPriority.CRITICAL.name ||
+                it.priority == AttentionPriority.HIGH.name
         }
-        ActivityFilter.QUEUED -> state.events.filter { it.queued }
+        ActivityFilter.QUIET -> state.events.filter { it.queued }
     }
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(
-            top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + 18.dp,
-            bottom = 28.dp,
+            start = Spacing.screenHorizontal,
+            end = Spacing.screenHorizontal,
+            bottom = Spacing.bottomBarClearance,
         ),
+        verticalArrangement = Arrangement.spacedBy(Spacing.md),
     ) {
         item {
-            ScreenHeader(
-                eyebrow = stringResource(R.string.review_your_notifications),
-                title = stringResource(R.string.review_review),
-                description = stringResource(R.string.review_see_how_notifications_were_handled_and_correct),
-            )
-            Row(
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 16.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                ActivityFilter.entries.forEach { option ->
-                    FilterChip(
-                        selected = option == filter,
-                        onClick = { filter = option },
-                        label = { Text(option.label) },
-                    )
-                }
-            }
-            if (state.unreviewedEvents.isNotEmpty()) {
-                Card(
-                    modifier = Modifier.padding(horizontal = 16.dp),
-                    shape = RoundedCornerShape(22.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.primaryContainer,
-                    ),
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(18.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Column(Modifier.weight(1f)) {
-                            Text(stringResource(R.string.review_quick_review), style = MaterialTheme.typography.titleMedium)
-                            val decisionCount = state.unreviewedEvents.size
-                            Text(
-                                "$decisionCount ${if (decisionCount == 1) "decision" else "decisions"} ready for feedback",
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                        Button(onClick = { reviewing = true }) { Text(stringResource(R.string.review_review)) }
-                    }
-                }
-                Spacer(Modifier.height(10.dp))
-            }
-        }
-        if (displayedEvents.isEmpty()) {
-            item { EmptyActivity(hasAccess = true) }
-        } else {
-            items(displayedEvents, key = { it.id }) { event ->
-                EventRow(
-                    event = event,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 5.dp),
-                    showExplanation = true,
-                    onFeedback = onFeedback,
-                )
-            }
-        }
-    }
-}
-
-@Composable
-internal fun ModernReviewSession(
-    event: NotificationListItem?,
-    reviewedCount: Int,
-    remainingToGoal: Int,
-    onImportant: (NotificationListItem) -> Unit,
-    onNotImportant: (NotificationListItem) -> Unit,
-    onSkip: (NotificationListItem) -> Unit,
-    onDone: () -> Unit,
-) {
-    val motionEnabled = LocalMotionEnabled.current
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background),
-    ) {
-        AmbientBackdrop()
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(
-                    top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + 18.dp,
-                    start = 20.dp,
-                    end = 20.dp,
-                    bottom = 20.dp,
-                ),
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                BrandMark()
-                Spacer(Modifier.width(12.dp))
-                Column(Modifier.weight(1f)) {
-                    Text(
-                        "GUIDED REVIEW",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.primary,
-                    )
-                    Text(stringResource(R.string.review_teach_what_matters), style = MaterialTheme.typography.headlineMedium)
-                }
-                TextButton(onClick = onDone) { Text(stringResource(R.string.review_close)) }
-            }
-            Spacer(Modifier.height(20.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.statusBarsPadding()) {
+                VSpace(Spacing.lg)
+                Text("Review", style = MaterialTheme.typography.headlineMedium)
+                VSpace(Spacing.xs)
                 Text(
-                    "$reviewedCount handled",
-                    style = MaterialTheme.typography.labelLarge,
-                )
-                Spacer(Modifier.width(10.dp))
-                LinearProgressIndicator(
-                    progress = { ((50 - remainingToGoal) / 50f).coerceIn(0f, 1f) },
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(7.dp)
-                        .clip(CircleShape),
-                    color = Violet400,
-                    trackColor = MaterialTheme.colorScheme.outlineVariant,
-                )
-                Spacer(Modifier.width(10.dp))
-                Text(
-                    "${(50 - remainingToGoal).coerceAtLeast(0)}/50",
-                    style = MaterialTheme.typography.labelLarge,
+                    "See how notifications were handled, and correct anything that feels wrong.",
+                    style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            Spacer(Modifier.height(20.dp))
-            AnimatedContent(
-                targetState = event,
-                transitionSpec = {
-                    if (motionEnabled) {
-                        (fadeIn(tween(260)) + scaleIn(tween(260), initialScale = 0.97f)) togetherWith
-                            fadeOut(tween(140))
-                    } else {
-                        fadeIn(tween(0)) togetherWith fadeOut(tween(0))
-                    }
-                },
-                label = "review-card",
-                modifier = Modifier.weight(1f),
-            ) { current ->
-                if (current == null) {
-                    Card(
-                        modifier = Modifier.fillMaxSize(),
-                        shape = RoundedCornerShape(30.dp),
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                        ),
-                    ) {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .padding(28.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.Center,
-                        ) {
-                            Box(
-                                Modifier
-                                    .size(76.dp)
-                                    .background(Mint500.copy(alpha = 0.16f), CircleShape),
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                Icon(
-                                    Icons.Default.CheckCircle,
-                                    contentDescription = null,
-                                    tint = Mint500,
-                                    modifier = Modifier.size(40.dp),
-                                )
-                            }
-                            Spacer(Modifier.height(18.dp))
-                            Text(stringResource(R.string.review_youre_all_caught_up), style = MaterialTheme.typography.headlineMedium)
-                            Spacer(Modifier.height(7.dp))
-                            Text(
-                                "There are no more notifications waiting for feedback.",
-                                style = MaterialTheme.typography.bodyLarge,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                    }
-                } else {
-                    ReviewDecisionCard(current)
+        }
+
+        if (queue.isNotEmpty()) {
+            item {
+                AttentionCard(tone = MaterialTheme.colorScheme.primaryContainer) {
+                    Text(
+                        "Quick review",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                    )
+                    VSpace(Spacing.xs)
+                    Text(
+                        text = if (queue.size == 1) {
+                            "1 decision is ready for your feedback."
+                        } else {
+                            "${queue.size} decisions are ready for your feedback."
+                        },
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.85f),
+                    )
+                    VSpace(Spacing.md)
+                    Button(onClick = { reviewing = true }) { Text("Start") }
                 }
             }
-            Spacer(Modifier.height(16.dp))
-            if (event == null) {
-                Button(
-                    onClick = onDone,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(56.dp),
-                    shape = RoundedCornerShape(18.dp),
-                ) {
-                    Text(stringResource(R.string.review_return_to_activity))
+        }
+
+        item {
+            Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
+                ActivityFilter.entries.forEach { option ->
+                    FilterChip(
+                        selected = filter == option,
+                        onClick = { filter = option },
+                        label = { Text(option.label) },
+                        modifier = Modifier.semantics { role = Role.RadioButton },
+                    )
                 }
-            } else {
-                DecisionButton(
-                    label = stringResource(R.string.review_this_matters),
-                    subtitle = stringResource(R.string.review_remember_this_as_important),
-                    accent = Violet400,
-                    filled = true,
-                    onClick = { onImportant(event) },
+            }
+        }
+
+        if (visible.isEmpty()) {
+            item {
+                EmptyState(
+                    title = "Nothing here yet",
+                    description = "Decisions appear as notifications arrive on your device.",
                 )
-                Spacer(Modifier.height(10.dp))
-                DecisionButton(
-                    label = stringResource(R.string.review_this_can_wait),
-                    subtitle = stringResource(R.string.review_remember_that_this_can_wait),
-                    accent = Mint500,
-                    filled = false,
-                    onClick = { onNotImportant(event) },
-                )
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.Center,
-                ) {
-                    TextButton(onClick = { onSkip(event) }) { Text(stringResource(R.string.review_skip_this_one)) }
+            }
+        } else {
+            items(visible, key = { it.id }) { event -> NotificationRow(event) }
+        }
+    }
+}
+
+internal enum class ActivityFilter(val label: String) {
+    ALL("All"),
+    IMPORTANT("Important"),
+    QUIET("Quiet"),
+}
+
+/** Full-screen judging session. */
+@Composable
+private fun ReviewSession(
+    event: NotificationListItem?,
+    judged: Int,
+    onDecide: (NotificationListItem, Boolean) -> Unit,
+    onSkip: (NotificationListItem) -> Unit,
+    onClose: () -> Unit,
+) {
+    Surface(color = MaterialTheme.colorScheme.background) {
+        Column(
+            Modifier
+                .fillMaxSize()
+                .statusBarsPadding()
+                .navigationBarsPadding()
+                .padding(horizontal = Spacing.screenHorizontal),
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = Spacing.md),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text("Teach what matters", style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        "$judged reviewed",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                 }
+                TextButton(onClick = onClose) { Text("Done") }
+            }
+
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth(),
+                contentAlignment = Alignment.Center,
+            ) {
+                AnimatedContent(
+                    targetState = event,
+                    transitionSpec = { fadeIn() togetherWith fadeOut() },
+                    label = "review-card",
+                ) { current ->
+                    if (current == null) {
+                        SessionComplete(judged, onClose)
+                    } else {
+                        SwipeableDecisionCard(
+                            event = current,
+                            onDecide = { important -> onDecide(current, important) },
+                        )
+                    }
+                }
+            }
+
+            if (event != null) {
+                DecisionButtons(
+                    onImportant = { onDecide(event, true) },
+                    onCanWait = { onDecide(event, false) },
+                    onSkip = { onSkip(event) },
+                )
             }
         }
     }
 }
 
+/**
+ * The card itself.
+ *
+ * Drag tracks the finger with a slight rotation, and the tint previews the outcome before
+ * release. Crossing the commit threshold fires a haptic, so the decision can be felt rather than
+ * watched.
+ */
 @Composable
-internal fun ReviewDecisionCard(event: NotificationListItem) {
-    val accent = priorityColor(event.priority)
-    Card(
-        modifier = Modifier.fillMaxSize(),
-        shape = RoundedCornerShape(30.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        border = androidx.compose.foundation.BorderStroke(
-            1.dp,
-            MaterialTheme.colorScheme.outlineVariant,
-        ),
+private fun SwipeableDecisionCard(
+    event: NotificationListItem,
+    onDecide: (Boolean) -> Unit,
+) {
+    val enabled = motionEnabled()
+    val haptics = rememberHaptics()
+    val density = LocalDensity.current
+    val commitPx = with(density) { COMMIT_THRESHOLD.toPx() }
+
+    var offset by remember(event.id) { mutableStateOf(0f) }
+    var crossedThreshold by remember(event.id) { mutableStateOf(false) }
+
+    val animatedOffset by animateFloatAsState(
+        targetValue = offset,
+        animationSpec = Motion.tracking(enabled),
+        label = "card-offset",
+    )
+    val progress = (animatedOffset / commitPx).coerceIn(-1f, 1f)
+    val tint = when {
+        progress > 0.05f -> PriorityColors.high.copy(alpha = 0.16f * progress)
+        progress < -0.05f -> PriorityColors.low.copy(alpha = 0.16f * -progress)
+        else -> Color.Transparent
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .graphicsLayer {
+                translationX = animatedOffset
+                rotationZ = progress * 6f
+            }
+            .pointerInput(event.id) {
+                detectHorizontalDragGestures(
+                    onDragEnd = {
+                        when {
+                            offset > commitPx -> onDecide(true)
+                            offset < -commitPx -> onDecide(false)
+                            else -> offset = 0f
+                        }
+                        crossedThreshold = false
+                    },
+                    onDragCancel = {
+                        offset = 0f
+                        crossedThreshold = false
+                    },
+                ) { _, dragAmount ->
+                    offset += dragAmount
+                    val past = abs(offset) > commitPx
+                    if (past != crossedThreshold) {
+                        crossedThreshold = past
+                        if (past) haptics.threshold()
+                    }
+                }
+            }
+            // Swiping cannot be the only route: these give screen-reader users the same two
+            // choices through an explicit action list.
+            .semantics {
+                contentDescription = "Notification from ${event.appLabel}. " +
+                    "Swipe right if important, left if it can wait."
+                customActions = listOf(
+                    CustomAccessibilityAction("Mark important") { onDecide(true); true },
+                    CustomAccessibilityAction("Mark can wait") { onDecide(false); true },
+                )
+            },
     ) {
-        Column(Modifier.padding(24.dp)) {
+        AttentionCard(tone = MaterialTheme.colorScheme.surfaceContainerLow) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(
-                    Modifier
-                        .size(54.dp)
-                        .background(accent.copy(alpha = 0.13f), RoundedCornerShape(18.dp)),
+                    modifier = Modifier
+                        .size(Spacing.huge)
+                        .background(
+                            accentForPriorityName(event.priority).copy(alpha = 0.14f),
+                            Radius.card,
+                        ),
                     contentAlignment = Alignment.Center,
                 ) {
                     Text(
                         event.appLabel.take(1).uppercase(),
-                        style = MaterialTheme.typography.headlineSmall,
-                        color = accent,
+                        style = MaterialTheme.typography.titleMedium,
+                        color = accentForPriorityName(event.priority),
                     )
                 }
-                Spacer(Modifier.width(13.dp))
+                HSpace(Spacing.md)
                 Column(Modifier.weight(1f)) {
+                    Text(event.appLabel, style = MaterialTheme.typography.titleSmall)
                     Text(
-                        event.appLabel,
-                        style = MaterialTheme.typography.titleLarge,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    Text(
-                        formatEventTime(event.postedAt),
-                        style = MaterialTheme.typography.bodyMedium,
+                        "Handled as",
+                        style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
-                PriorityPill(event.priority, accent)
+                runCatching { AttentionPriority.valueOf(event.priority) }
+                    .getOrNull()
+                    ?.let { PriorityChip(it) }
             }
-            Spacer(Modifier.height(26.dp))
+
+            VSpace(Spacing.lg)
             Text(
-                event.title ?: event.category.lowercase().replaceFirstChar(Char::titlecase),
-                style = MaterialTheme.typography.headlineMedium,
+                text = event.title ?: "This notification",
+                style = MaterialTheme.typography.headlineSmall,
+                maxLines = 3,
+                overflow = TextOverflow.Ellipsis,
             )
-            event.message?.let {
-                Spacer(Modifier.height(10.dp))
+            event.message?.let { body ->
+                VSpace(Spacing.sm)
                 Text(
-                    it,
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            Spacer(Modifier.weight(1f))
-            Surface(
-                color = accent.copy(alpha = 0.10f),
-                shape = RoundedCornerShape(18.dp),
-            ) {
-                Column(Modifier.padding(16.dp)) {
-                    Text(
-                        "WHY IT WAS HANDLED THIS WAY",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = accent,
-                    )
-                    Spacer(Modifier.height(5.dp))
-                    Text(event.explanation, style = MaterialTheme.typography.bodyMedium)
-                    event.personalProbability?.let {
-                        Spacer(Modifier.height(8.dp))
-                        Text(
-                            "Personal estimate · ${(it * 100).toInt()}% likely important",
-                            style = MaterialTheme.typography.labelLarge,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-internal fun DecisionButton(
-    label: String,
-    subtitle: String,
-    accent: Color,
-    filled: Boolean,
-    onClick: () -> Unit,
-) {
-    Surface(
-        onClick = onClick,
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(62.dp),
-        shape = RoundedCornerShape(19.dp),
-        color = if (filled) accent else accent.copy(alpha = 0.11f),
-        border = if (filled) null else androidx.compose.foundation.BorderStroke(
-            1.dp,
-            accent.copy(alpha = 0.26f),
-        ),
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 18.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Box(
-                Modifier
-                    .size(10.dp)
-                    .background(if (filled) Color.White else accent, CircleShape),
-            )
-            Spacer(Modifier.width(12.dp))
-            Column(Modifier.weight(1f)) {
-                Text(
-                    label,
-                    style = MaterialTheme.typography.titleMedium,
-                    color = if (filled) Color.White else MaterialTheme.colorScheme.onSurface,
-                )
-                Text(
-                    subtitle,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = if (filled) Color.White.copy(alpha = 0.72f) else {
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                    },
-                )
-            }
-            Icon(
-                Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                contentDescription = null,
-                tint = if (filled) Color.White else accent,
-            )
-        }
-    }
-}
-
-@Composable
-internal fun EventRow(
-    event: NotificationListItem,
-    modifier: Modifier = Modifier,
-    showExplanation: Boolean = false,
-    onFeedback: ((String, Boolean) -> Unit)? = null,
-) {
-    val accent = priorityColor(event.priority)
-    Card(
-        modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(19.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-    ) {
-        Row(Modifier.padding(15.dp), verticalAlignment = Alignment.Top) {
-            Box(
-                modifier = Modifier
-                    .size(42.dp)
-                    .background(accent.copy(alpha = 0.17f), RoundedCornerShape(13.dp)),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(
-                    event.appLabel.take(1).uppercase(),
-                    style = MaterialTheme.typography.titleMedium,
-                    color = accent,
-                )
-            }
-            Spacer(Modifier.width(12.dp))
-            Column(Modifier.weight(1f)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        event.appLabel,
-                        style = MaterialTheme.typography.titleMedium,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f),
-                    )
-                    PriorityPill(event.priority, accent)
-                }
-                Spacer(Modifier.height(3.dp))
-                Text(
-                    event.title ?: event.category.lowercase().replaceFirstChar(Char::titlecase),
+                    body,
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
+                    maxLines = 4,
                     overflow = TextOverflow.Ellipsis,
                 )
-                if (event.message != null) {
+            }
+
+            VSpace(Spacing.lg)
+            Surface(
+                shape = Radius.card,
+                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Column(Modifier.padding(Spacing.md)) {
                     Text(
-                        event.message,
-                        style = MaterialTheme.typography.bodyMedium,
+                        "WHY",
+                        style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
                     )
-                }
-                if (showExplanation) {
-                    Spacer(Modifier.height(7.dp))
-                    Text(
-                        event.explanation,
-                        style = MaterialTheme.typography.labelMedium,
-                        color = accent,
-                    )
+                    VSpace(Spacing.xs)
+                    Text(event.explanation, style = MaterialTheme.typography.bodyMedium)
                     event.personalProbability?.let { probability ->
+                        VSpace(Spacing.sm)
                         Text(
-                            if (event.personalModelApplied) {
-                                "Personal preference applied · ${(probability * 100).toInt()}% important"
+                            text = if (event.personalModelApplied) {
+                                "Your preferences applied · " +
+                                    "${(probability * 100).roundToInt()}% important"
                             } else {
-                                "Personal estimate · ${(probability * 100).toInt()}% important"
+                                "Personal estimate · ${(probability * 100).roundToInt()}% important"
                             },
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                    if (
-                        event.action != "IMPORTANT" &&
-                        event.action != "NOT_IMPORTANT" &&
-                        onFeedback != null
-                    ) {
-                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            TextButton(
-                                onClick = { onFeedback(event.notificationKey, true) },
-                                contentPadding = PaddingValues(horizontal = 8.dp),
-                            ) { Text(stringResource(R.string.review_important)) }
-                            TextButton(
-                                onClick = { onFeedback(event.notificationKey, false) },
-                                contentPadding = PaddingValues(horizontal = 8.dp),
-                            ) { Text(stringResource(R.string.review_not_important)) }
-                        }
-                    } else if (event.action == "IMPORTANT" || event.action == "NOT_IMPORTANT") {
-                        Text(
-                            if (event.action == "IMPORTANT") "Marked important" else "Marked not important",
-                            style = MaterialTheme.typography.labelMedium,
+                            style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.primary,
                         )
                     }
                 }
-                Spacer(Modifier.height(6.dp))
+            }
+        }
+
+        // Outcome preview drawn over the card as it is dragged.
+        Box(
+            Modifier
+                .matchParentSize()
+                .background(tint, Radius.card),
+        )
+        if (abs(progress) > 0.15f) {
+            Box(
+                Modifier
+                    .matchParentSize()
+                    .padding(Spacing.xl),
+                contentAlignment = if (progress > 0) Alignment.CenterStart else Alignment.CenterEnd,
+            ) {
                 Text(
-                    formatEventTime(event.postedAt),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                    text = if (progress > 0) "IMPORTANT" else "CAN WAIT",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = if (progress > 0) PriorityColors.high else PriorityColors.low,
+                    modifier = Modifier.alpha(abs(progress)),
                 )
             }
+        }
+    }
+}
+
+@Composable
+private fun DecisionButtons(
+    onImportant: () -> Unit,
+    onCanWait: () -> Unit,
+    onSkip: () -> Unit,
+) {
+    val haptics = rememberHaptics()
+    Column(Modifier.padding(vertical = Spacing.lg)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(Spacing.md)) {
+            OutlinedButton(
+                onClick = {
+                    haptics.confirm()
+                    onCanWait()
+                },
+                modifier = Modifier.weight(1f),
+            ) {
+                Text("Can wait")
+            }
+            Button(
+                onClick = {
+                    haptics.confirm()
+                    onImportant()
+                },
+                modifier = Modifier.weight(1f),
+            ) {
+                Text("This matters")
+            }
+        }
+        TextButton(onClick = onSkip, modifier = Modifier.fillMaxWidth()) { Text("Skip") }
+    }
+}
+
+/** The reward for finishing — where the old flow ended with a plain check icon. */
+@Composable
+private fun SessionComplete(judged: Int, onClose: () -> Unit) {
+    val enabled = motionEnabled()
+    var shown by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        delay(60)
+        shown = true
+    }
+
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        AnimatedVisibility(
+            visible = shown,
+            enter = fadeIn() +
+                scaleIn(initialScale = 0.6f, animationSpec = Motion.playful(enabled)),
+        ) {
+            CalmMark()
+        }
+        VSpace(Spacing.xl)
+        Text("All caught up", style = MaterialTheme.typography.headlineSmall)
+        VSpace(Spacing.sm)
+        Text(
+            text = when (judged) {
+                0 -> "Nothing waiting for review right now."
+                1 -> "One correction saved. Your helper just got a little sharper."
+                else -> "$judged corrections saved. Your helper just got a little sharper."
+            },
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        VSpace(Spacing.xl)
+        Button(onClick = onClose) { Text("Done") }
+    }
+}
+
+private val COMMIT_THRESHOLD = 110.dp
+
+@Preview(name = "Review · light", heightDp = 900)
+@Composable
+private fun ReviewPreview() {
+    AttentionTheme(themeMode = ThemeMode.Light) {
+        Surface(color = MaterialTheme.colorScheme.background) {
+            ActivityScreen(
+                state = MainUiState(isLoading = false),
+                onFeedback = { _, _ -> },
+                reviewRequest = 0,
+            )
+        }
+    }
+}
+
+@Preview(name = "Review · dark", heightDp = 900)
+@Composable
+private fun ReviewDarkPreview() {
+    AttentionTheme(themeMode = ThemeMode.Dark) {
+        Surface(color = MaterialTheme.colorScheme.background) {
+            ActivityScreen(
+                state = MainUiState(isLoading = false),
+                onFeedback = { _, _ -> },
+                reviewRequest = 0,
+            )
         }
     }
 }
