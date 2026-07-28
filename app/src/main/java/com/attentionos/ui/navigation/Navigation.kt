@@ -40,13 +40,26 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
 import com.attentionos.ui.theme.LocalMotionEnabled
 
+/**
+ * The four top-level tabs.
+ *
+ * [route] is the navigation-graph identifier; the enum stays the single place that maps a tab
+ * to its route so the bottom bar and the graph cannot disagree.
+ */
 internal enum class AppDestination(
     val label: String,
+    val route: String,
 ) {
-    TODAY("Home"),
-    ACTIVITY("Review"),
-    INSIGHTS("Summary"),
-    SETTINGS("Settings"),
+    TODAY("Home", "home"),
+    ACTIVITY("Review", "review"),
+    INSIGHTS("Summary", "insights"),
+    SETTINGS("Settings", "settings"),
+    ;
+
+    internal companion object {
+        fun fromRoute(route: String?): AppDestination =
+            entries.firstOrNull { it.route == route } ?: TODAY
+    }
 }
 
 @Composable

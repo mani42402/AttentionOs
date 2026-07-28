@@ -45,6 +45,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -82,11 +83,14 @@ internal fun ActivityScreen(
 ) {
     var filter by rememberSaveable { mutableStateOf(ActivityFilter.ALL) }
     var reviewing by rememberSaveable { mutableStateOf(false) }
-    var skippedIds by remember { mutableStateOf(emptySet<Long>()) }
+    // Saveable: rotating mid-session used to replay notifications already reviewed.
+    var skippedIds by rememberSaveable { mutableStateOf(emptySet<Long>()) }
     LaunchedEffect(reviewRequest) {
         if (reviewRequest > 0) reviewing = true
     }
     val reviewEvents = state.unreviewedEvents.filterNot { it.id in skippedIds }
+    // The session is a full-screen takeover, so back should leave it rather than exit the app.
+    BackHandler(enabled = reviewing) { reviewing = false }
     if (reviewing) {
         ModernReviewSession(
             event = reviewEvents.firstOrNull(),

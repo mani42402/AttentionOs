@@ -10,13 +10,6 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
-import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
-import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Spacer
@@ -36,9 +29,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -47,12 +38,15 @@ import com.attentionos.ui.MainViewModel
 import com.attentionos.ui.UiEvent
 import com.attentionos.ui.theme.AttentionTheme
 import com.attentionos.ui.theme.Forest950
-import com.attentionos.ui.theme.LocalMotionEnabled
 import com.attentionos.service.ReviewReminderWorker
 import com.attentionos.ui.components.rememberNotificationAccess
 import com.attentionos.ui.home.DashboardScreen
 import com.attentionos.ui.insights.SimpleSummaryScreen
 import com.attentionos.ui.navigation.AppDestination
+import androidx.navigation.compose.rememberNavController
+import androidx.navigation.compose.currentBackStackEntryAsState
+import com.attentionos.ui.navigation.AttentionNavHost
+import com.attentionos.ui.navigation.navigateToTab
 import com.attentionos.ui.navigation.HelperBottomBar
 import com.attentionos.ui.onboarding.OnboardingScreen
 import com.attentionos.ui.review.ActivityScreen
@@ -178,22 +172,6 @@ class MainActivity : ComponentActivity() {
 }
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 @Composable
 private fun AttentionApp(
     state: MainUiState,
@@ -222,10 +200,11 @@ private fun AttentionApp(
     onFeedback: (String, Boolean) -> Unit,
     onOpenNotificationAccess: () -> Unit,
 ) {
-    var destination by rememberSaveable { mutableStateOf(AppDestination.TODAY) }
-    val motionEnabled = LocalMotionEnabled.current
+    val navController = rememberNavController()
+    val backStackEntry by navController.currentBackStackEntryAsState()
+    val destination = AppDestination.fromRoute(backStackEntry?.destination?.route)
     LaunchedEffect(reviewRequest) {
-        if (reviewRequest > 0) destination = AppDestination.ACTIVITY
+        if (reviewRequest > 0) navController.navigateToTab(AppDestination.ACTIVITY)
     }
     val hasAccess = rememberNotificationAccess()
 
@@ -237,42 +216,38 @@ private fun AttentionApp(
         bottomBar = {
             HelperBottomBar(
                 selected = destination,
-                onSelected = { destination = it },
+                onSelected = navController::navigateToTab,
             )
         },
     ) { scaffoldPadding ->
         Box(Modifier.fillMaxSize()) {
-            AnimatedContent(
-                targetState = destination,
-                transitionSpec = {
-                    if (motionEnabled) {
-                        (fadeIn(tween(240)) + slideInVertically(tween(260)) { it / 16 }) togetherWith
-                            (fadeOut(tween(150)) + slideOutVertically(tween(180)) { -it / 18 })
-                    } else {
-                        fadeIn(tween(0)) togetherWith fadeOut(tween(0))
-                    }
-                },
-                label = "destination",
+            AttentionNavHost(
+                navController = navController,
                 modifier = Modifier.padding(bottom = scaffoldPadding.calculateBottomPadding()),
-            ) { current ->
-                when (current) {
-                    AppDestination.TODAY -> DashboardScreen(
+                home = {
+                    DashboardScreen(
                         state = state,
                         hasAccess = hasAccess,
                         onFocusChanged = onFocusChanged,
                         onOpenNotificationAccess = onOpenNotificationAccess,
-                        onSeeActivity = { destination = AppDestination.ACTIVITY },
+                        onSeeActivity = { navController.navigateToTab(AppDestination.ACTIVITY) },
                     )
-                    AppDestination.ACTIVITY -> ActivityScreen(
+                },
+                review = {
+                    ActivityScreen(
                         state = state,
                         onFeedback = onFeedback,
                         reviewRequest = reviewRequest,
                     )
-                    AppDestination.INSIGHTS -> SimpleSummaryScreen(
+                },
+                insights = {
+                    SimpleSummaryScreen(
                         state = state,
-                        onReview = { destination = AppDestination.ACTIVITY },
+                        onReview = { navController.navigateToTab(AppDestination.ACTIVITY) },
                     )
-                    AppDestination.SETTINGS -> SettingsScreen(
+                },
+                settings = {
+                    SettingsScreen(
                         state = state,
                         hasAccess = hasAccess,
                         onFocusChanged = onFocusChanged,
@@ -296,8 +271,8 @@ private fun AttentionApp(
                         onResetPersonalizedModel = onResetPersonalizedModel,
                         onDelete = onDelete,
                     )
-                }
-            }
+                },
+            )
             // Android 15+ enforces edge-to-edge. Keep status icons readable on every tab.
             Spacer(
                 Modifier
@@ -308,58 +283,5 @@ private fun AttentionApp(
         }
     }
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
