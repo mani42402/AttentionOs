@@ -10,6 +10,7 @@ import com.attentionos.data.settings.SettingsRepository
 import com.attentionos.domain.PriorityEngine
 import com.attentionos.security.DatabaseEncryptionMigrator
 import com.attentionos.security.KeyManager
+import com.attentionos.security.SenderHasher
 import com.attentionos.security.rawKeyLiteral
 import com.attentionos.training.ExportManager
 import kotlinx.coroutines.CoroutineScope
@@ -66,6 +67,7 @@ class AppContainer(
                 AttentionDatabase.MIGRATION_3_4,
                 AttentionDatabase.MIGRATION_4_5,
                 AttentionDatabase.MIGRATION_5_6,
+                AttentionDatabase.MIGRATION_6_7,
             )
             // No destructive fallback. Dropping every table would erase the user's history,
             // learned sender memory and personalized model without warning; a migration defect
@@ -91,7 +93,11 @@ class AppContainer(
     )
 
     val attentionRepository: AttentionRepository by lazy {
-        AttentionRepository(database.attentionDao(), PriorityEngine(languageAnalyzer))
+        AttentionRepository(
+            dao = database.attentionDao(),
+            priorityEngine = PriorityEngine(languageAnalyzer),
+            senderHasher = SenderHasher(keyManager.senderHashSecret()),
+        )
     }
 
     private val languageAnalyzer: MiniLmLanguageAnalyzer by lazy {

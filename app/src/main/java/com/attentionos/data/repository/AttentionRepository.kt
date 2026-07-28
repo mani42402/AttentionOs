@@ -18,6 +18,8 @@ import com.attentionos.domain.NotificationCategory
 import com.attentionos.domain.NotificationSignal
 import com.attentionos.domain.PriorityEngine
 import com.attentionos.domain.UserMemory
+import com.attentionos.security.SenderHasher
+import com.attentionos.security.SenderIdentity
 import com.attentionos.training.EmbeddingCodec
 import com.attentionos.training.ModelWeightsCodec
 import com.attentionos.training.PersonalizedAttentionModel
@@ -35,6 +37,7 @@ import kotlinx.coroutines.sync.withLock
 class AttentionRepository(
     private val dao: AttentionDao,
     private val priorityEngine: PriorityEngine,
+    private val senderHasher: SenderHasher,
 ) {
     private val modelMutex = Mutex()
     private var modelLoaded = false
@@ -114,8 +117,14 @@ class AttentionRepository(
         signal: NotificationSignal,
         settings: AppSettings,
     ): AttentionDecision {
-        val senderIdentity = "${signal.packageName}:${signal.title.orEmpty()}"
-        val senderHash = stableHash(senderIdentity)
+        val senderHash = senderHasher.hash(
+            signal.conversationId ?: SenderIdentity.of(
+                packageName = signal.packageName,
+                personKey = null,
+                shortcutId = null,
+                title = signal.title,
+            ),
+        )
         val memoryEntity = dao.memory(senderHash)
         val memory = memoryEntity?.toDomain()
         val hour = Instant.ofEpochMilli(signal.postedAt)

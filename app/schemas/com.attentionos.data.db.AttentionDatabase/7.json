@@ -1,0 +1,450 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 7,
+    "identityHash": "d8fb7908555f5029b913b69a8965cb06",
+    "entities": [
+      {
+        "tableName": "notification_events",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `notificationKey` TEXT NOT NULL, `packageName` TEXT NOT NULL, `appLabel` TEXT NOT NULL, `senderHash` TEXT NOT NULL, `title` TEXT, `message` TEXT, `postedAt` INTEGER NOT NULL, `priority` TEXT NOT NULL, `category` TEXT NOT NULL, `score` REAL NOT NULL, `explanation` TEXT NOT NULL, `queued` INTEGER NOT NULL, `action` TEXT, `actedAt` INTEGER, `embeddingQ8` BLOB, `languageModelVersion` TEXT, `contextHour` INTEGER NOT NULL, `focusModeAtDecision` INTEGER NOT NULL, `senderImportanceAtDecision` REAL NOT NULL, `senderOpenRateAtDecision` REAL NOT NULL, `baseScoreAtDecision` REAL NOT NULL, `semanticUrgency` REAL NOT NULL, `personalProbability` REAL, `personalModelApplied` INTEGER NOT NULL, `analysisDurationMillis` INTEGER NOT NULL)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "notificationKey",
+            "columnName": "notificationKey",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "packageName",
+            "columnName": "packageName",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "appLabel",
+            "columnName": "appLabel",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "senderHash",
+            "columnName": "senderHash",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "title",
+            "columnName": "title",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "message",
+            "columnName": "message",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "postedAt",
+            "columnName": "postedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "priority",
+            "columnName": "priority",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "category",
+            "columnName": "category",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "score",
+            "columnName": "score",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "explanation",
+            "columnName": "explanation",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "queued",
+            "columnName": "queued",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "action",
+            "columnName": "action",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "actedAt",
+            "columnName": "actedAt",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "embeddingQ8",
+            "columnName": "embeddingQ8",
+            "affinity": "BLOB"
+          },
+          {
+            "fieldPath": "languageModelVersion",
+            "columnName": "languageModelVersion",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "contextHour",
+            "columnName": "contextHour",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "focusModeAtDecision",
+            "columnName": "focusModeAtDecision",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "senderImportanceAtDecision",
+            "columnName": "senderImportanceAtDecision",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "senderOpenRateAtDecision",
+            "columnName": "senderOpenRateAtDecision",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "baseScoreAtDecision",
+            "columnName": "baseScoreAtDecision",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "semanticUrgency",
+            "columnName": "semanticUrgency",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "personalProbability",
+            "columnName": "personalProbability",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "personalModelApplied",
+            "columnName": "personalModelApplied",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "analysisDurationMillis",
+            "columnName": "analysisDurationMillis",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_notification_events_notificationKey",
+            "unique": true,
+            "columnNames": [
+              "notificationKey"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_notification_events_notificationKey` ON `${TABLE_NAME}` (`notificationKey`)"
+          },
+          {
+            "name": "index_notification_events_postedAt",
+            "unique": false,
+            "columnNames": [
+              "postedAt"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_notification_events_postedAt` ON `${TABLE_NAME}` (`postedAt`)"
+          },
+          {
+            "name": "index_notification_events_senderHash",
+            "unique": false,
+            "columnNames": [
+              "senderHash"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_notification_events_senderHash` ON `${TABLE_NAME}` (`senderHash`)"
+          },
+          {
+            "name": "index_notification_events_priority",
+            "unique": false,
+            "columnNames": [
+              "priority"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_notification_events_priority` ON `${TABLE_NAME}` (`priority`)"
+          },
+          {
+            "name": "index_notification_events_queued",
+            "unique": false,
+            "columnNames": [
+              "queued"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_notification_events_queued` ON `${TABLE_NAME}` (`queued`)"
+          },
+          {
+            "name": "index_notification_events_action_postedAt",
+            "unique": false,
+            "columnNames": [
+              "action",
+              "postedAt"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_notification_events_action_postedAt` ON `${TABLE_NAME}` (`action`, `postedAt`)"
+          }
+        ]
+      },
+      {
+        "tableName": "user_memory",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`senderHash` TEXT NOT NULL, `importanceScore` REAL NOT NULL, `averageResponseSeconds` INTEGER NOT NULL, `openCount` INTEGER NOT NULL, `dismissCount` INTEGER NOT NULL, `interactionCount` INTEGER NOT NULL, `updatedAt` INTEGER NOT NULL, PRIMARY KEY(`senderHash`))",
+        "fields": [
+          {
+            "fieldPath": "senderHash",
+            "columnName": "senderHash",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "importanceScore",
+            "columnName": "importanceScore",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "averageResponseSeconds",
+            "columnName": "averageResponseSeconds",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "openCount",
+            "columnName": "openCount",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "dismissCount",
+            "columnName": "dismissCount",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "interactionCount",
+            "columnName": "interactionCount",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "updatedAt",
+            "columnName": "updatedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "senderHash"
+          ]
+        }
+      },
+      {
+        "tableName": "training_examples",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `sourceEventId` INTEGER NOT NULL, `featuresJson` TEXT NOT NULL, `expectedPriority` TEXT NOT NULL, `createdAt` INTEGER NOT NULL, `exported` INTEGER NOT NULL, `embeddingQ8` BLOB, `languageModelVersion` TEXT)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sourceEventId",
+            "columnName": "sourceEventId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "featuresJson",
+            "columnName": "featuresJson",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "expectedPriority",
+            "columnName": "expectedPriority",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "createdAt",
+            "columnName": "createdAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "exported",
+            "columnName": "exported",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "embeddingQ8",
+            "columnName": "embeddingQ8",
+            "affinity": "BLOB"
+          },
+          {
+            "fieldPath": "languageModelVersion",
+            "columnName": "languageModelVersion",
+            "affinity": "TEXT"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_training_examples_createdAt",
+            "unique": false,
+            "columnNames": [
+              "createdAt"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_training_examples_createdAt` ON `${TABLE_NAME}` (`createdAt`)"
+          }
+        ]
+      },
+      {
+        "tableName": "personalized_model",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER NOT NULL, `weights` BLOB NOT NULL, `bias` REAL NOT NULL, `positiveCount` INTEGER NOT NULL, `negativeCount` INTEGER NOT NULL, `updatedAt` INTEGER NOT NULL, `version` INTEGER NOT NULL, `evaluationCount` INTEGER NOT NULL, `personalCorrectCount` INTEGER NOT NULL, `baselineCorrectCount` INTEGER NOT NULL, `importantEvaluationCount` INTEGER NOT NULL, `importantCorrectCount` INTEGER NOT NULL, `notImportantEvaluationCount` INTEGER NOT NULL, `falseImportantCount` INTEGER NOT NULL, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "weights",
+            "columnName": "weights",
+            "affinity": "BLOB",
+            "notNull": true
+          },
+          {
+            "fieldPath": "bias",
+            "columnName": "bias",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "positiveCount",
+            "columnName": "positiveCount",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "negativeCount",
+            "columnName": "negativeCount",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "updatedAt",
+            "columnName": "updatedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "version",
+            "columnName": "version",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "evaluationCount",
+            "columnName": "evaluationCount",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "personalCorrectCount",
+            "columnName": "personalCorrectCount",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "baselineCorrectCount",
+            "columnName": "baselineCorrectCount",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "importantEvaluationCount",
+            "columnName": "importantEvaluationCount",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "importantCorrectCount",
+            "columnName": "importantCorrectCount",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "notImportantEvaluationCount",
+            "columnName": "notImportantEvaluationCount",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "falseImportantCount",
+            "columnName": "falseImportantCount",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        }
+      }
+    ],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'd8fb7908555f5029b913b69a8965cb06')"
+    ]
+  }
+}

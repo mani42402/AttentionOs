@@ -12,7 +12,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         TrainingExampleEntity::class,
         PersonalizedModelEntity::class,
     ],
-    version = 6,
+    version = 7,
     exportSchema = true,
 )
 abstract class AttentionDatabase : RoomDatabase() {
@@ -119,6 +119,27 @@ abstract class AttentionDatabase : RoomDatabase() {
          * Every insert invalidates the observed queries, so the important/queued/review lists
          * re-ran as full scans over the whole retention window on each incoming notification.
          */
+        /**
+         * Purges every identity derived from the old unsalted hash.
+         *
+         * The previous scheme was an unkeyed SHA-256 of `package:title`, which is reversible by
+         * enumerating installed packages against common contact names. The values cannot be
+         * re-derived under the new keyed scheme — titles are not stored unless the user opts in
+         * — and keeping them would leave the reversible identifiers sitting in the database, so
+         * they are cleared and relearned.
+         *
+         * What this costs the user: sender importance re-converges within a handful of
+         * interactions, and training examples only feed the JSONL export. The personalized
+         * model's learned weights are NOT touched.
+         */
+        val MIGRATION_6_7 = object : Migration(6, 7) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL("DELETE FROM user_memory")
+                database.execSQL("UPDATE notification_events SET senderHash = ''")
+                database.execSQL("DELETE FROM training_examples")
+            }
+        }
+
         val MIGRATION_5_6 = object : Migration(5, 6) {
             override fun migrate(database: SupportSQLiteDatabase) {
                 database.execSQL(
