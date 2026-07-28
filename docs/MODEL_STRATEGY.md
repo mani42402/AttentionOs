@@ -77,16 +77,24 @@ categories is unchanged.
 
 ### Deliberately deferred
 
-Two refinements from the original plan are not implemented, because they cost a feature-space
-version bump each and the two above carry most of the value:
+Three refinements from the original plan are not implemented. Each changes the feature space or
+the output shape, so each costs a version bump that discards learned weights:
 
-- **Hashed per-package bias feature** — would let the model learn "this workspace always matters"
-  in 2–3 corrections rather than dozens.
-- **Five-class ordinal head** — the model currently predicts binary, blends into a score, then
-  re-buckets into five levels, losing information twice.
+- **Probability calibration** (Platt scaling / tuned threshold). The blend currently feeds a raw
+  sigmoid into a score and re-buckets at fixed cutoffs, assuming 0.5 is the right decision
+  point. Calibration is the cheapest of the three and the one that most affects how the
+  probability behaves once it is blended.
+- **Hashed per-package bias feature** — would let the model learn "this workspace always
+  matters" in 2–3 corrections rather than dozens.
+- **Five-class ordinal head** — the model predicts binary, blends into a score, then re-buckets
+  into five levels, losing information twice.
 
-Both are worth doing; neither should be bundled with an encoder change, since separating them
-keeps it clear which change moved the numbers.
+These are best done together, and together with the static-embedding bake-off below: that
+evaluation may change the embedding to 256 dimensions, which rewrites `FEATURE_COUNT` and resets
+weights anyway. Batching them means one reset and one comparable measurement instead of four.
+
+They also cannot be judged properly yet. Personalization quality is only measurable against real
+correction histories, which do not exist until the app has been used for a while.
 
 ## Ruled out
 
