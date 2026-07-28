@@ -1,87 +1,83 @@
 package com.attentionos.ui.onboarding
 
-import android.provider.Settings
-import androidx.compose.animation.AnimatedContent
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.togetherWith
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.Notifications
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Star
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import com.attentionos.R
 import com.attentionos.ui.MainUiState
-import com.attentionos.ui.components.ElevatedPanel
-import com.attentionos.ui.components.HelperLogo
-import com.attentionos.ui.components.PriorityPill
-import com.attentionos.ui.components.SettingIcon
-import com.attentionos.ui.components.SoftDivider
-import com.attentionos.ui.components.modernSwitchColors
-import com.attentionos.ui.components.priorityColor
-import com.attentionos.ui.components.readableUiName
-import com.attentionos.ui.components.rememberNotificationAccess
-import com.attentionos.ui.settings.InterruptionPriorityRow
-import com.attentionos.ui.theme.Forest950
-import com.attentionos.ui.theme.Ice500
-import com.attentionos.ui.theme.LocalMotionEnabled
-import com.attentionos.ui.theme.Mint500
-import com.attentionos.ui.theme.Sun500
-import com.attentionos.ui.theme.Violet400
+import com.attentionos.ui.components.AttentionCard
+import com.attentionos.ui.components.HSpace
+import com.attentionos.ui.components.StatusDot
+import com.attentionos.ui.components.VSpace
+import com.attentionos.ui.theme.AttentionTheme
+import com.attentionos.ui.theme.Motion
+import com.attentionos.ui.theme.PriorityColors
+import com.attentionos.ui.theme.Radius
+import com.attentionos.ui.theme.Spacing
+import com.attentionos.ui.theme.ThemeMode
+import com.attentionos.ui.theme.motionEnabled
+import com.attentionos.ui.theme.rememberHaptics
+import kotlinx.coroutines.launch
 
+/**
+ * Onboarding.
+ *
+ * Rebuilt as a swipeable pager. The previous flow was button-only with no gesture support, no
+ * back handling — system back exited the app rather than stepping back — and, most oddly, a
+ * mandatory five-scenario diagnostic before setup could be completed. That test now lives in
+ * Insights, where it answers "show me it works" for someone who is curious rather than blocking
+ * someone who is trying to start.
+ *
+ * Every page can be skipped. Nothing here collects information the app cannot infer or ask for
+ * later, so forcing a linear path would only cost patience.
+ */
 @Composable
 internal fun OnboardingScreen(
     state: MainUiState,
@@ -96,629 +92,529 @@ internal fun OnboardingScreen(
     onOpenNotificationAccess: () -> Unit,
     onRequestNotificationPermission: () -> Unit,
 ) {
-    var step by rememberSaveable { mutableIntStateOf(0) }
-    var demoChoice by rememberSaveable { mutableStateOf<Boolean?>(null) }
-    val hasAccess = rememberNotificationAccess()
-    val motionEnabled = LocalMotionEnabled.current
-    val enter = if (motionEnabled) {
-        fadeIn(tween(320)) + slideInVertically(tween(320)) { it / 8 }
-    } else {
-        fadeIn(tween(0))
+    val pages = OnboardingPage.entries
+    val pagerState = rememberPagerState(pageCount = { pages.size })
+    val scope = rememberCoroutineScope()
+    val haptics = rememberHaptics()
+    val enabled = motionEnabled()
+
+    // Back steps through pages instead of leaving the app, which is what it did before.
+    BackHandler(enabled = pagerState.currentPage > 0) {
+        scope.launch { pagerState.animateScrollToPage(pagerState.currentPage - 1) }
     }
-    val exit = if (motionEnabled) fadeOut(tween(180)) else fadeOut(tween(0))
 
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background),
-    ) {
-        Spacer(
+    Surface(color = MaterialTheme.colorScheme.background) {
+        Column(
             Modifier
-                .fillMaxWidth()
-                .height(WindowInsets.statusBars.asPaddingValues().calculateTopPadding())
-                .background(Forest950)
-                .align(Alignment.TopCenter),
-        )
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(
-                top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + 18.dp,
-                start = 20.dp,
-                end = 20.dp,
-                bottom = 32.dp,
-            ),
-            verticalArrangement = Arrangement.spacedBy(18.dp),
+                .fillMaxSize()
+                .statusBarsPadding()
+                .navigationBarsPadding(),
         ) {
-            item {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
+            OnboardingHeader(
+                page = pagerState.currentPage,
+                total = pages.size,
+                onSkip = {
+                    haptics.select()
+                    onComplete()
+                },
+            )
+
+            HorizontalPager(
+                state = pagerState,
+                modifier = Modifier.weight(1f),
+            ) { index ->
+                Column(
+                    Modifier
+                        .fillMaxSize()
+                        .verticalScroll(rememberScrollState())
+                        .padding(horizontal = Spacing.screenHorizontal),
+                    // Pages are short; centring keeps them from stranding content at the top
+                    // with a large void beneath.
+                    verticalArrangement = Arrangement.Center,
                 ) {
-                    HelperLogo()
-                    Spacer(Modifier.width(10.dp))
-                    Column(Modifier.weight(1f)) {
-                        Text(
-                            "AttentionOS",
-                            style = MaterialTheme.typography.titleMedium,
+                    when (pages[index]) {
+                        OnboardingPage.Welcome -> WelcomePage()
+                        OnboardingPage.Promise -> PromisePage()
+                        OnboardingPage.Access -> AccessPage(
+                            connected = state.settings.onboardingComplete,
+                            onOpenAccess = onOpenNotificationAccess,
+                            onRequestPermission = onRequestNotificationPermission,
                         )
-                        Text(
-                            "Your personal notification helper",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        OnboardingPage.Preferences -> PreferencesPage(
+                            state = state,
+                            onFocusChanged = onFocusChanged,
+                            onCriticalSoundChanged = onCriticalSoundChanged,
+                            onCriticalVibrationChanged = onCriticalVibrationChanged,
+                            onHighSoundChanged = onHighSoundChanged,
+                            onHighVibrationChanged = onHighVibrationChanged,
+                            onReminderChanged = onReminderChanged,
                         )
+                        OnboardingPage.Ready -> ReadyPage()
                     }
-                    Surface(
-                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.86f),
-                        shape = CircleShape,
-                        border = androidx.compose.foundation.BorderStroke(
-                            1.dp,
-                            MaterialTheme.colorScheme.outlineVariant,
-                        ),
-                    ) {
-                        Text(
-                            "${step + 1} / 4",
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
-                            style = MaterialTheme.typography.labelLarge,
-                        )
-                    }
+                    VSpace(Spacing.xxxl)
                 }
             }
-            item { OnboardingStepIndicator(step) }
-            item {
-                AnimatedContent(
-                    targetState = step,
-                    transitionSpec = { enter togetherWith exit },
-                    label = "onboarding-step",
-                ) { currentStep ->
-                    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                        Text(
-                            when (currentStep) {
-                                0 -> "Your notifications.\nOn your terms."
-                                1 -> "Try your helper\nwith a notification."
-                                2 -> "Choose how it\ngets your attention."
-                                else -> "Check the safety\nrules together."
-                            },
-                            style = MaterialTheme.typography.displaySmall,
-                        )
-                        Text(
-                            when (currentStep) {
-                                0 -> "A personal helper that learns what matters to you, quiets unnecessary interruption, and never hides your notifications."
-                                1 -> "Use this safe demo to see how quick feedback shapes future notification behavior."
-                                2 -> "You decide which priority levels may make sound or vibrate. Every option remains available in Settings."
-                                else -> "Run five examples through the real on-device safety path before beginning."
-                            },
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
 
-                        when (currentStep) {
-                            0 -> {
-                                FeatureOverviewPanel()
-                                AccessCard(
-                                    connected = hasAccess,
-                                    onClick = onOpenNotificationAccess,
-                                )
-                            }
+            PageIndicator(
+                current = pagerState.currentPage,
+                total = pages.size,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = Spacing.md),
+            )
 
-                            1 -> NotificationDemoCard(
-                                choice = demoChoice,
-                                onChoice = { demoChoice = it },
-                            )
-
-                            2 -> {
-                                FeatureToggleCard(
-                                    icon = Icons.Default.Lock,
-                                    title = stringResource(R.string.insights_attention_mode),
-                                    subtitle = stringResource(R.string.onboarding_your_helper_manages_which_priorities_may_interrupt),
-                                    checked = state.settings.focusMode,
-                                    accent = Violet400,
-                                    onCheckedChange = onFocusChanged,
-                                )
-                                InterruptionSetupCard(
-                                    state = state,
-                                    onCriticalSoundChanged = onCriticalSoundChanged,
-                                    onCriticalVibrationChanged = onCriticalVibrationChanged,
-                                    onHighSoundChanged = onHighSoundChanged,
-                                    onHighVibrationChanged = onHighVibrationChanged,
-                                )
-                                FeatureToggleCard(
-                                    icon = Icons.Default.Notifications,
-                                    title = stringResource(R.string.onboarding_quiet_review_reminders),
-                                    subtitle = stringResource(R.string.onboarding_choose_any_time_up_to_six_times),
-                                    checked = state.settings.reviewReminderEnabled,
-                                    accent = Mint500,
-                                    onCheckedChange = {
-                                        onReminderChanged(it)
-                                        if (it) onRequestNotificationPermission()
-                                    },
-                                )
-                            }
-
-                            else -> SafetyTestPanel(
-                                state = state,
-                                onRunTestLab = onRunTestLab,
-                            )
-                        }
-                    }
-                }
-            }
-            item {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    if (step > 0) {
-                        TextButton(onClick = { step-- }) { Text(stringResource(R.string.onboarding_back)) }
-                    }
-                    Button(
-                        onClick = {
-                            if (step < 3) step++ else onComplete()
-                        },
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(56.dp),
-                        enabled = when {
-                            step == 1 -> demoChoice != null
-                            step < 3 -> true
-                            else -> state.testLab.results.isNotEmpty()
-                        },
-                        shape = RoundedCornerShape(18.dp),
-                    ) {
-                        Text(
-                            if (step < 3) "Continue" else "Start using my helper",
-                            style = MaterialTheme.typography.labelLarge,
-                        )
-                        Spacer(Modifier.width(6.dp))
-                        Icon(
-                            Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                            contentDescription = null,
-                        )
-                    }
-                }
-                if (step == 3 && state.testLab.results.isEmpty()) {
-                    Text(
-                        "Complete the safety check to finish setup.",
-                        modifier = Modifier.padding(top = 10.dp),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                } else if (step == 1 && demoChoice == null) {
-                    Text(
-                        "Try one demo choice to continue.",
-                        modifier = Modifier.padding(top = 10.dp),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
+            OnboardingActions(
+                isFirst = pagerState.currentPage == 0,
+                isLast = pagerState.currentPage == pages.lastIndex,
+                onBack = {
+                    scope.launch { pagerState.animateScrollToPage(pagerState.currentPage - 1) }
+                },
+                onNext = {
+                    haptics.select()
+                    scope.launch { pagerState.animateScrollToPage(pagerState.currentPage + 1) }
+                },
+                onFinish = {
+                    haptics.celebrate()
+                    onComplete()
+                },
+            )
         }
     }
 }
 
+private enum class OnboardingPage { Welcome, Promise, Access, Preferences, Ready }
+
 @Composable
-internal fun OnboardingStepIndicator(step: Int) {
+private fun OnboardingHeader(page: Int, total: Int, onSkip: () -> Unit) {
     Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = Spacing.screenHorizontal, vertical = Spacing.md),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        repeat(4) { index ->
-            val selected = index <= step
-            val width by animateFloatAsState(
-                targetValue = if (index == step) 1.65f else 1f,
-                animationSpec = tween(if (LocalMotionEnabled.current) 260 else 0),
-                label = "step-width",
+        Text(
+            text = "AttentionOS",
+            style = MaterialTheme.typography.titleMedium,
+            modifier = Modifier.weight(1f),
+        )
+        Text(
+            text = "${page + 1} / $total",
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        HSpace(Spacing.sm)
+        TextButton(onClick = onSkip) { Text("Skip") }
+    }
+}
+
+/**
+ * Progress dots.
+ *
+ * The active dot stretches into a bar, which reads as position rather than decoration. Announced
+ * as a single "step N of M" rather than as five separate elements.
+ */
+@Composable
+private fun PageIndicator(current: Int, total: Int, modifier: Modifier = Modifier) {
+    val enabled = motionEnabled()
+    Row(
+        modifier = modifier.semantics {
+            contentDescription = "Step ${current + 1} of $total"
+        },
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        repeat(total) { index ->
+            val active = index == current
+            val width by animateDpAsState(
+                targetValue = if (active) Spacing.xxl else Spacing.sm,
+                animationSpec = Motion.snappy(enabled),
+                label = "indicator-width",
+            )
+            val color by animateColorAsState(
+                targetValue = if (active) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.surfaceContainerHighest
+                },
+                animationSpec = Motion.snappy(enabled),
+                label = "indicator-color",
             )
             Box(
                 Modifier
-                    .weight(width)
-                    .height(5.dp)
-                    .clip(CircleShape)
-                    .background(
-                        if (selected) {
-                            Brush.horizontalGradient(listOf(Ice500, Ice500))
-                        } else {
-                            Brush.horizontalGradient(
-                                listOf(
-                                    MaterialTheme.colorScheme.outlineVariant,
-                                    MaterialTheme.colorScheme.outlineVariant,
-                                ),
-                            )
-                        },
-                    ),
+                    .padding(horizontal = Spacing.xs)
+                    .height(Spacing.sm)
+                    .width(width)
+                    .background(color, Radius.pill)
+                    .clearAndSetSemantics { },
             )
         }
     }
 }
 
 @Composable
-internal fun FeatureOverviewPanel() {
-    ElevatedPanel {
-        OnboardingFeature(
-            number = "1",
-            title = stringResource(R.string.onboarding_everything_remains_visible),
-            description = stringResource(R.string.onboarding_quiet_means_no_sound_or_vibration_not),
-        )
-        SoftDivider()
-        OnboardingFeature(
-            number = "2",
-            title = stringResource(R.string.onboarding_important_alerts_can_reach_you),
-            description = stringResource(R.string.onboarding_you_choose_which_priorities_may_make_sound),
-        )
-        SoftDivider()
-        OnboardingFeature(
-            number = "3",
-            title = stringResource(R.string.onboarding_it_adapts_to_your_choices),
-            description = stringResource(R.string.onboarding_short_important_or_can_wait_reviews_build),
-        )
-    }
-}
-
-@Composable
-internal fun OnboardingFeature(
-    number: String,
-    title: String,
-    description: String,
+private fun OnboardingActions(
+    isFirst: Boolean,
+    isLast: Boolean,
+    onBack: () -> Unit,
+    onNext: () -> Unit,
+    onFinish: () -> Unit,
 ) {
     Row(
-        modifier = Modifier.padding(16.dp),
-        verticalAlignment = Alignment.Top,
-    ) {
-        Surface(
-            modifier = Modifier.size(34.dp),
-            color = MaterialTheme.colorScheme.primaryContainer,
-            shape = RoundedCornerShape(11.dp),
-        ) {
-            Box(contentAlignment = Alignment.Center) {
-                Text(
-                    number,
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.primary,
-                )
-            }
-        }
-        Spacer(Modifier.width(12.dp))
-        Column {
-            Text(title, style = MaterialTheme.typography.titleMedium)
-            Text(
-                description,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-    }
-}
-
-@Composable
-internal fun NotificationDemoCard(
-    choice: Boolean?,
-    onChoice: (Boolean) -> Unit,
-) {
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Surface(
-            color = MaterialTheme.colorScheme.primaryContainer,
-            shape = RoundedCornerShape(16.dp),
-        ) {
-            Row(
-                modifier = Modifier.padding(14.dp),
-                verticalAlignment = Alignment.Top,
-            ) {
-                Text(
-                    "1",
-                    modifier = Modifier
-                        .background(MaterialTheme.colorScheme.primary, CircleShape)
-                        .padding(horizontal = 9.dp, vertical = 4.dp),
-                    style = MaterialTheme.typography.labelLarge,
-                    color = Color.White,
-                )
-                Spacer(Modifier.width(10.dp))
-                Column {
-                    Text(stringResource(R.string.onboarding_demo_hint), style = MaterialTheme.typography.titleMedium)
-                    Text(
-                        "Imagine this just arrived. Choose how you would want your phone to behave.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
-        }
-        Card(
-            shape = RoundedCornerShape(22.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-            border = androidx.compose.foundation.BorderStroke(
-                1.dp,
-                MaterialTheme.colorScheme.outline,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(
+                horizontal = Spacing.screenHorizontal,
+                vertical = Spacing.lg,
             ),
-        ) {
-            Column(Modifier.padding(18.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Surface(
-                        modifier = Modifier.size(42.dp),
-                        color = Ice500.copy(alpha = 0.12f),
-                        shape = RoundedCornerShape(13.dp),
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Text("M", color = Ice500, style = MaterialTheme.typography.titleMedium)
-                        }
-                    }
-                    Spacer(Modifier.width(12.dp))
-                    Column(Modifier.weight(1f)) {
-                        Text(stringResource(R.string.onboarding_messages_maya), style = MaterialTheme.typography.titleMedium)
-                        Text(
-                            "just now",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                }
-                Spacer(Modifier.height(18.dp))
-                Text(
-                    "Can you call me when you’re free?",
-                    style = MaterialTheme.typography.titleLarge,
-                )
-                Spacer(Modifier.height(18.dp))
-                Button(
-                    onClick = { onChoice(true) },
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = if (choice == true) Ice500 else {
-                            MaterialTheme.colorScheme.primary
-                        },
-                    ),
-                    shape = RoundedCornerShape(15.dp),
-                ) {
-                    Text(stringResource(R.string.onboarding_notify_me))
-                }
-                Spacer(Modifier.height(8.dp))
-                OutlinedButton(
-                    onClick = { onChoice(false) },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(15.dp),
-                ) {
-                    Text(stringResource(R.string.onboarding_keep_it_quiet))
-                }
-            }
+        horizontalArrangement = Arrangement.spacedBy(Spacing.md),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        AnimatedVisibility(visible = !isFirst) {
+            OutlinedButton(onClick = onBack) { Text("Back") }
         }
-        AnimatedVisibility(
-            visible = choice != null,
-            enter = fadeIn(tween(220)) + slideInVertically(tween(220)) { it / 4 },
+        Button(
+            onClick = if (isLast) onFinish else onNext,
+            modifier = Modifier.weight(1f),
         ) {
-            Surface(
-                color = Mint500.copy(alpha = 0.10f),
-                shape = RoundedCornerShape(16.dp),
-                border = androidx.compose.foundation.BorderStroke(
-                    1.dp,
-                    Mint500.copy(alpha = 0.22f),
-                ),
+            Text(if (isLast) "Start using my helper" else "Continue")
+        }
+    }
+}
+
+// ── Pages ─────────────────────────────────────────────────────────────────────
+
+@Composable
+private fun WelcomePage() {
+    Column {
+        VSpace(Spacing.xxxl)
+        BreathingMark()
+        VSpace(Spacing.xxl)
+        Text(
+            "Your notifications.\nOn your terms.",
+            style = MaterialTheme.typography.displaySmall,
+        )
+        VSpace(Spacing.md)
+        Text(
+            "A helper that learns what deserves your attention, quiets the rest, and never " +
+                "hides anything from you.",
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+@Composable
+private fun PromisePage() {
+    Column {
+        VSpace(Spacing.xxl)
+        Text("Three promises", style = MaterialTheme.typography.headlineMedium)
+        VSpace(Spacing.lg)
+        listOf(
+            "Nothing is hidden" to
+                "Quiet means no sound or vibration. Every notification stays in your shade.",
+            "Urgent always reaches you" to
+                "Security codes, bank alerts, calls and alarms are never held back.",
+            "It stays on your phone" to
+                "Analysis runs on this device, encrypted. There is no account and no upload.",
+        ).forEachIndexed { index, (title, body) ->
+            PromiseRow(index + 1, title, body)
+            VSpace(Spacing.md)
+        }
+    }
+}
+
+@Composable
+private fun PromiseRow(number: Int, title: String, body: String) {
+    AttentionCard {
+        Row(verticalAlignment = Alignment.Top) {
+            Box(
+                modifier = Modifier
+                    .size(Spacing.xxl + Spacing.xs)
+                    .background(MaterialTheme.colorScheme.primaryContainer, Radius.pill),
+                contentAlignment = Alignment.Center,
             ) {
-                Row(
-                    modifier = Modifier.padding(14.dp),
-                    verticalAlignment = Alignment.Top,
-                ) {
-                    Text(
-                        "2",
-                        modifier = Modifier
-                            .background(Mint500, CircleShape)
-                            .padding(horizontal = 9.dp, vertical = 4.dp),
-                        style = MaterialTheme.typography.labelLarge,
-                        color = Color.White,
-                    )
-                    Spacer(Modifier.width(10.dp))
-                    Column {
-                        Text(
-                            if (choice == true) "This would be allowed to notify you" else {
-                                "This would stay visible without interruption"
-                            },
-                            style = MaterialTheme.typography.titleMedium,
-                        )
-                        Text(
-                            "In the real app, choices like this help your helper understand you. This demo saves nothing.",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-internal fun AccessCard(connected: Boolean, onClick: () -> Unit) {
-    val accent = if (connected) Mint500 else Sun500
-    Card(
-        onClick = onClick,
-        shape = RoundedCornerShape(24.dp),
-        colors = CardDefaults.cardColors(containerColor = accent.copy(alpha = 0.12f)),
-        border = androidx.compose.foundation.BorderStroke(1.dp, accent.copy(alpha = 0.25f)),
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(18.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            SettingIcon(
-                if (connected) Icons.Default.CheckCircle else Icons.Default.Notifications,
-                accent,
-            )
-            Spacer(Modifier.width(14.dp))
-            Column(Modifier.weight(1f)) {
                 Text(
-                    if (connected) "Notification access connected" else "Connect notification access",
-                    style = MaterialTheme.typography.titleMedium,
-                )
-                Text(
-                    if (connected) "Ready for private classification" else "Required to analyze alerts on this device",
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    style = MaterialTheme.typography.bodyMedium,
+                    number.toString(),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                    modifier = Modifier.clearAndSetSemantics { },
                 )
             }
-            Icon(
-                Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                contentDescription = null,
-                tint = accent,
-            )
-        }
-    }
-}
-
-@Composable
-internal fun FeatureToggleCard(
-    icon: ImageVector,
-    title: String,
-    subtitle: String,
-    checked: Boolean,
-    accent: Color,
-    onCheckedChange: (Boolean) -> Unit,
-) {
-    Card(
-        shape = RoundedCornerShape(24.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = if (checked) accent.copy(alpha = 0.12f) else {
-                MaterialTheme.colorScheme.surface
-            },
-        ),
-        border = androidx.compose.foundation.BorderStroke(
-            1.dp,
-            if (checked) accent.copy(alpha = 0.28f) else MaterialTheme.colorScheme.outlineVariant,
-        ),
-    ) {
-        Row(
-            modifier = Modifier.padding(18.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            SettingIcon(icon, accent)
-            Spacer(Modifier.width(14.dp))
-            Column(Modifier.weight(1f)) {
+            HSpace(Spacing.md)
+            Column {
                 Text(title, style = MaterialTheme.typography.titleMedium)
+                VSpace(Spacing.xxs)
                 Text(
-                    subtitle,
+                    body,
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            Switch(
-                checked = checked,
-                onCheckedChange = onCheckedChange,
-                colors = modernSwitchColors(accent),
-            )
         }
     }
 }
 
 @Composable
-internal fun InterruptionSetupCard(
+private fun AccessPage(
+    connected: Boolean,
+    onOpenAccess: () -> Unit,
+    onRequestPermission: () -> Unit,
+) {
+    Column {
+        VSpace(Spacing.xxl)
+        Text("One permission", style = MaterialTheme.typography.headlineMedium)
+        VSpace(Spacing.md)
+        Text(
+            "Your helper needs to see notifications to sort them. That access stays on this " +
+                "device — the app has no internet permission at all.",
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        VSpace(Spacing.xl)
+        AttentionCard(tone = MaterialTheme.colorScheme.tertiaryContainer) {
+            Text(
+                "Notification access",
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onTertiaryContainer,
+            )
+            VSpace(Spacing.xs)
+            Text(
+                "Opens Android's settings. You can turn it off any time.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.85f),
+            )
+            VSpace(Spacing.md)
+            Button(onClick = onOpenAccess) { Text("Allow access") }
+        }
+        VSpace(Spacing.md)
+        TextButton(onClick = onRequestPermission) {
+            Text("Also allow reminders")
+        }
+    }
+}
+
+@Composable
+private fun PreferencesPage(
     state: MainUiState,
+    onFocusChanged: (Boolean) -> Unit,
     onCriticalSoundChanged: (Boolean) -> Unit,
     onCriticalVibrationChanged: (Boolean) -> Unit,
     onHighSoundChanged: (Boolean) -> Unit,
     onHighVibrationChanged: (Boolean) -> Unit,
+    onReminderChanged: (Boolean) -> Unit,
 ) {
-    ElevatedPanel {
+    Column {
+        VSpace(Spacing.xxl)
+        Text("How should it reach you?", style = MaterialTheme.typography.headlineMedium)
+        VSpace(Spacing.md)
         Text(
-            "INTERRUPTION RULES",
-            modifier = Modifier.padding(start = 18.dp, top = 18.dp, bottom = 3.dp),
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.primary,
+            "You can change any of this later in Settings.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        InterruptionPriorityRow(
-            priority = "Critical",
-            description = stringResource(R.string.settings_security_safety_and_immediate_action),
-            sound = state.settings.criticalSound,
-            vibration = state.settings.criticalVibration,
-            onSoundChanged = onCriticalSoundChanged,
-            onVibrationChanged = onCriticalVibrationChanged,
+        VSpace(Spacing.lg)
+
+        ChoiceCard(
+            title = "Attention Mode",
+            body = "Let your helper manage sound and vibration.",
+            checked = state.settings.focusMode,
+            onCheckedChange = onFocusChanged,
         )
-        SoftDivider()
-        InterruptionPriorityRow(
-            priority = "High",
-            description = stringResource(R.string.settings_important_and_time_sensitive),
-            sound = state.settings.highSound,
-            vibration = state.settings.highVibration,
-            onSoundChanged = onHighSoundChanged,
-            onVibrationChanged = onHighVibrationChanged,
+        VSpace(Spacing.md)
+        ChoiceCard(
+            title = "Urgent alerts make a sound",
+            body = "Security, bank, calls and alarms.",
+            accent = PriorityColors.critical,
+            checked = state.settings.criticalSound,
+            onCheckedChange = onCriticalSoundChanged,
+        )
+        VSpace(Spacing.md)
+        ChoiceCard(
+            title = "Urgent alerts vibrate",
+            body = "A physical nudge for the things that matter most.",
+            accent = PriorityColors.critical,
+            checked = state.settings.criticalVibration,
+            onCheckedChange = onCriticalVibrationChanged,
+        )
+        VSpace(Spacing.md)
+        ChoiceCard(
+            title = "Important alerts make a sound",
+            body = "Things your helper thinks probably need you.",
+            accent = PriorityColors.high,
+            checked = state.settings.highSound,
+            onCheckedChange = onHighSoundChanged,
+        )
+        VSpace(Spacing.md)
+        ChoiceCard(
+            title = "Important alerts vibrate",
+            body = "Vibration for likely-important notifications.",
+            accent = PriorityColors.high,
+            checked = state.settings.highVibration,
+            onCheckedChange = onHighVibrationChanged,
+        )
+        VSpace(Spacing.md)
+        ChoiceCard(
+            title = "Daily review reminder",
+            body = "A quiet nudge to teach your helper what matters.",
+            checked = state.settings.reviewReminderEnabled,
+            onCheckedChange = onReminderChanged,
         )
     }
 }
 
 @Composable
-internal fun SafetyTestPanel(
-    state: MainUiState,
-    onRunTestLab: () -> Unit,
+private fun ChoiceCard(
+    title: String,
+    body: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    accent: androidx.compose.ui.graphics.Color? = null,
 ) {
-    ElevatedPanel {
-        Column(Modifier.padding(20.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                SettingIcon(Icons.Default.Star, Violet400)
-                Spacer(Modifier.width(12.dp))
-                Column {
-                    Text(stringResource(R.string.onboarding_notification_safety_check), style = MaterialTheme.typography.titleLarge)
-                    Text(
-                        "Runs privately · posts nothing",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
+    val enabled = motionEnabled()
+    val haptics = rememberHaptics()
+    val container by animateColorAsState(
+        targetValue = if (checked) {
+            MaterialTheme.colorScheme.primaryContainer
+        } else {
+            MaterialTheme.colorScheme.surfaceContainerLow
+        },
+        animationSpec = Motion.snappy(enabled),
+        label = "choice-container",
+    )
+    val onContainer = if (checked) {
+        MaterialTheme.colorScheme.onPrimaryContainer
+    } else {
+        MaterialTheme.colorScheme.onSurface
+    }
+
+    Surface(
+        shape = Radius.card,
+        color = container,
+        onClick = {
+            haptics.select()
+            onCheckedChange(!checked)
+        },
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Row(
+            Modifier.padding(Spacing.lg),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            accent?.let {
+                StatusDot(it, size = Spacing.sm)
+                HSpace(Spacing.md)
             }
-            Spacer(Modifier.height(16.dp))
-            Button(
-                onClick = onRunTestLab,
-                enabled = !state.testLab.isRunning,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(52.dp),
-                shape = RoundedCornerShape(16.dp),
-            ) {
+            Column(Modifier.weight(1f)) {
+                Text(title, style = MaterialTheme.typography.titleSmall, color = onContainer)
                 Text(
-                    when {
-                        state.testLab.isRunning -> "Analyzing on device…"
-                        state.testLab.results.isEmpty() -> "Run five scenarios"
-                        else -> "Run safety check again"
-                    },
+                    body,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = onContainer.copy(alpha = 0.75f),
                 )
             }
-            state.testLab.error?.let {
-                Spacer(Modifier.height(10.dp))
-                Text(it, color = MaterialTheme.colorScheme.error)
-            }
-            AnimatedVisibility(
-                visible = state.testLab.results.isNotEmpty(),
-                enter = fadeIn() + slideInVertically { it / 5 },
-            ) {
-                Column {
-                    Spacer(Modifier.height(14.dp))
-                    state.testLab.results.forEachIndexed { index, result ->
-                        if (index > 0) SoftDivider()
-                        Row(
-                            modifier = Modifier.padding(vertical = 10.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Box(
-                                Modifier
-                                    .size(9.dp)
-                                    .background(
-                                        priorityColor(result.finalPriority.name),
-                                        CircleShape,
-                                    ),
-                            )
-                            Spacer(Modifier.width(10.dp))
-                            Column(Modifier.weight(1f)) {
-                                Text(result.name, style = MaterialTheme.typography.titleMedium)
-                                Text(
-                                    "${result.durationMillis} ms · ${result.category.readableUiName()}",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            }
-                            PriorityPill(
-                                result.finalPriority.name,
-                                priorityColor(result.finalPriority.name),
-                            )
-                        }
-                    }
-                }
-            }
+            androidx.compose.material3.Switch(
+                checked = checked,
+                onCheckedChange = null,
+                modifier = Modifier.clearAndSetSemantics { },
+            )
         }
+    }
+}
+
+/** The payoff page: a moment of arrival rather than another form. */
+@Composable
+private fun ReadyPage() {
+    val enabled = motionEnabled()
+    var shown by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { shown = true }
+
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        VSpace(Spacing.giant)
+        AnimatedVisibility(
+            visible = shown,
+            enter = fadeIn(Motion.gentle(enabled)) +
+                scaleIn(initialScale = 0.7f, animationSpec = Motion.playful(enabled)),
+        ) {
+            BreathingMark(size = 112.dp)
+        }
+        VSpace(Spacing.xxl)
+        Text("You're all set.", style = MaterialTheme.typography.displaySmall)
+        VSpace(Spacing.md)
+        Text(
+            "Your helper starts watching quietly. For the first week it only learns — it won't " +
+                "change how anything reaches you until it has checked itself.",
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        VSpace(Spacing.xl)
+        AttentionCard(tone = MaterialTheme.colorScheme.secondaryContainer) {
+            Text(
+                "Curious how it decides?",
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.onSecondaryContainer,
+            )
+            VSpace(Spacing.xxs)
+            Text(
+                "Insights has a live check you can run any time.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.85f),
+            )
+        }
+    }
+}
+
+/** The brand mark: two rings, slowly breathing. */
+@Composable
+private fun BreathingMark(size: androidx.compose.ui.unit.Dp = 88.dp) {
+    val enabled = motionEnabled()
+    val scale by animateFloatAsState(
+        targetValue = 1f,
+        animationSpec = Motion.playful(enabled),
+        label = "mark-scale",
+    )
+    val primary = MaterialTheme.colorScheme.primary
+    val secondary = MaterialTheme.colorScheme.secondary
+
+    Canvas(
+        modifier = Modifier
+            .size(size)
+            .clearAndSetSemantics { },
+    ) {
+        val radius = this.size.minDimension / 2f
+        drawCircle(color = primary.copy(alpha = 0.10f), radius = radius * scale)
+        drawCircle(
+            color = primary,
+            radius = radius * 0.62f * scale,
+            style = Stroke(width = 3.dp.toPx(), cap = StrokeCap.Round),
+        )
+        drawCircle(color = secondary, radius = radius * 0.18f * scale)
+    }
+}
+
+@Preview(name = "Onboarding · light", heightDp = 900)
+@Composable
+private fun OnboardingPreview() {
+    AttentionTheme(themeMode = ThemeMode.Light) {
+        OnboardingScreen(
+            state = MainUiState(isLoading = false),
+            onFocusChanged = {}, onCriticalSoundChanged = {}, onCriticalVibrationChanged = {},
+            onHighSoundChanged = {}, onHighVibrationChanged = {}, onReminderChanged = {},
+            onRunTestLab = {}, onComplete = {}, onOpenNotificationAccess = {},
+            onRequestNotificationPermission = {},
+        )
+    }
+}
+
+@Preview(name = "Onboarding · dark", heightDp = 900)
+@Composable
+private fun OnboardingDarkPreview() {
+    AttentionTheme(themeMode = ThemeMode.Dark) {
+        OnboardingScreen(
+            state = MainUiState(isLoading = false),
+            onFocusChanged = {}, onCriticalSoundChanged = {}, onCriticalVibrationChanged = {},
+            onHighSoundChanged = {}, onHighVibrationChanged = {}, onReminderChanged = {},
+            onRunTestLab = {}, onComplete = {}, onOpenNotificationAccess = {},
+            onRequestNotificationPermission = {},
+        )
     }
 }

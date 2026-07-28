@@ -43,7 +43,7 @@ import com.attentionos.ui.MainViewModel
 import com.attentionos.ui.UiEvent
 import com.attentionos.ui.components.rememberNotificationAccess
 import com.attentionos.ui.home.DashboardScreen
-import com.attentionos.ui.insights.SimpleSummaryScreen
+import com.attentionos.ui.insights.InsightsScreen
 import com.attentionos.ui.navigation.AppDestination
 import com.attentionos.ui.navigation.AttentionNavHost
 import com.attentionos.ui.navigation.HelperBottomBar
@@ -53,6 +53,7 @@ import com.attentionos.ui.review.ActivityScreen
 import com.attentionos.ui.settings.SettingsScreen
 import com.attentionos.ui.theme.AttentionTheme
 import com.attentionos.ui.theme.Forest950
+import com.attentionos.ui.theme.ThemeMode
 import kotlinx.coroutines.flow.MutableStateFlow
 
 class MainActivity : ComponentActivity() {
@@ -88,7 +89,8 @@ class MainActivity : ComponentActivity() {
             }
 
             AttentionTheme(
-                darkTheme = uiState.settings.darkTheme,
+                themeMode = ThemeMode.fromStorage(uiState.settings.themeMode),
+                dynamicColor = uiState.settings.dynamicColor,
                 motionEnabled = uiState.settings.motionEnabled,
             ) {
                 val reviewRequest by openReviewRequest.collectAsStateWithLifecycle()
@@ -148,7 +150,8 @@ class MainActivity : ComponentActivity() {
                         onMediumVibrationChanged = viewModel::setMediumVibration,
                         onReminderChanged = viewModel::setReviewReminderEnabled,
                         onReminderTimesChanged = viewModel::setReviewReminderTimes,
-                        onDarkThemeChanged = viewModel::setDarkTheme,
+                        onThemeModeChanged = viewModel::setThemeMode,
+                        onDynamicColorChanged = viewModel::setDynamicColor,
                         onMotionChanged = viewModel::setMotionEnabled,
                         onScreenSecurityChanged = viewModel::setScreenSecurity,
                         onRequestNotificationPermission = ::requestNotificationPermission,
@@ -211,7 +214,8 @@ private fun AttentionApp(
     onMediumVibrationChanged: (Boolean) -> Unit,
     onReminderChanged: (Boolean) -> Unit,
     onReminderTimesChanged: (Set<Int>) -> Unit,
-    onDarkThemeChanged: (Boolean) -> Unit,
+    onThemeModeChanged: (ThemeMode) -> Unit,
+    onDynamicColorChanged: (Boolean) -> Unit,
     onMotionChanged: (Boolean) -> Unit,
     onScreenSecurityChanged: (Boolean) -> Unit,
     onRequestNotificationPermission: () -> Unit,
@@ -266,9 +270,10 @@ private fun AttentionApp(
                     )
                 },
                 insights = {
-                    SimpleSummaryScreen(
+                    InsightsScreen(
                         state = state,
                         onReview = { navController.navigateToTab(AppDestination.ACTIVITY) },
+                        onRunTestLab = onRunTestLab,
                     )
                 },
                 settings = {
@@ -287,7 +292,8 @@ private fun AttentionApp(
                         onMediumVibrationChanged = onMediumVibrationChanged,
                         onReminderChanged = onReminderChanged,
                         onReminderTimesChanged = onReminderTimesChanged,
-                        onDarkThemeChanged = onDarkThemeChanged,
+                        onThemeModeChanged = onThemeModeChanged,
+                        onDynamicColorChanged = onDynamicColorChanged,
                         onMotionChanged = onMotionChanged,
                         onScreenSecurityChanged = onScreenSecurityChanged,
                         onRequestNotificationPermission = onRequestNotificationPermission,
