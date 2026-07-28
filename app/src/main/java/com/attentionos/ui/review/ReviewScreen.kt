@@ -56,7 +56,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.attentionos.data.db.NotificationEventEntity
+import com.attentionos.data.db.NotificationListItem
 import com.attentionos.ui.MainUiState
 import com.attentionos.ui.theme.LocalMotionEnabled
 import com.attentionos.ui.theme.Mint500
@@ -187,12 +187,12 @@ internal fun ActivityScreen(
 
 @Composable
 internal fun ModernReviewSession(
-    event: NotificationEventEntity?,
+    event: NotificationListItem?,
     reviewedCount: Int,
     remainingToGoal: Int,
-    onImportant: (NotificationEventEntity) -> Unit,
-    onNotImportant: (NotificationEventEntity) -> Unit,
-    onSkip: (NotificationEventEntity) -> Unit,
+    onImportant: (NotificationListItem) -> Unit,
+    onNotImportant: (NotificationListItem) -> Unit,
+    onSkip: (NotificationListItem) -> Unit,
     onDone: () -> Unit,
 ) {
     val motionEnabled = LocalMotionEnabled.current
@@ -343,7 +343,7 @@ internal fun ModernReviewSession(
 }
 
 @Composable
-internal fun ReviewDecisionCard(event: NotificationEventEntity) {
+internal fun ReviewDecisionCard(event: NotificationListItem) {
     val accent = priorityColor(event.priority)
     Card(
         modifier = Modifier.fillMaxSize(),
@@ -479,7 +479,7 @@ internal fun DecisionButton(
 
 @Composable
 internal fun EventRow(
-    event: NotificationEventEntity,
+    event: NotificationListItem,
     modifier: Modifier = Modifier,
     showExplanation: Boolean = false,
     onFeedback: ((String, Boolean) -> Unit)? = null,

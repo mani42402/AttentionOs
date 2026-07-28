@@ -5,26 +5,33 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.attentionos.core.common.TimeConstants
 import com.attentionos.core.di.AppContainer
-import com.attentionos.data.settings.AppSettings
+import com.attentionos.data.db.NotificationListItem
 import com.attentionos.data.repository.AttentionTestResult
 import com.attentionos.data.repository.UserAction
-import com.attentionos.data.db.NotificationEventEntity
+import com.attentionos.data.settings.AppSettings
 import com.attentionos.training.ExportResult
 import com.attentionos.training.PersonalizedModelProgress
 import java.time.LocalDate
 import java.time.ZoneId
+import kotlin.math.roundToInt
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 data class MainUiState(
     val settings: AppSettings = AppSettings(),
-    val events: List<NotificationEventEntity> = emptyList(),
+    val events: List<NotificationListItem> = emptyList(),
     val receivedToday: Int = 0,
     val importantToday: Int = 0,
     val queuedToday: Int = 0,
@@ -34,12 +41,20 @@ data class MainUiState(
     val testLab: TestLabUiState = TestLabUiState(),
     val isLoading: Boolean = true,
 ) {
-    val estimatedMinutesSaved: Int get() = (queuedToday * 24) / 60
-    val unreviewedEvents: List<NotificationEventEntity>
+    /**
+     * Rough attention saved, assuming a held-back notification costs about
+     * [SECONDS_PER_INTERRUPTION] of refocusing.
+     *
+     * Rounds rather than truncating: integer division reported "0 min" until three
+     * notifications had been queued, so the first two looked like they saved nothing.
+     */
+    val estimatedMinutesSaved: Int
+        get() = ((queuedToday * SECONDS_PER_INTERRUPTION) / 60f).roundToInt()
+    val unreviewedEvents: List<NotificationListItem>
         get() = events.filter {
             it.action != UserAction.IMPORTANT.name &&
                 it.action != UserAction.NOT_IMPORTANT.name &&
-                it.embeddingQ8 != null
+                it.hasEmbedding
         }
     val pilotDaysElapsed: Int
         get() = if (settings.pilotStartedAt <= 0L) {
@@ -55,6 +70,10 @@ data class MainUiState(
             System.currentTimeMillis() - settings.pilotStartedAt >=
             TimeConstants.PILOT_DURATION_MILLIS
     val personalModelActive: Boolean get() = personalizedModel.isActive && pilotComplete
+
+    private companion object {
+        const val SECONDS_PER_INTERRUPTION = 24
+    }
 }
 
 data class TestLabUiState(
@@ -87,18 +106,33 @@ private data class LearningStats(
 
 class MainViewModel(private val container: AppContainer) : ViewModel() {
     private val testLabState = MutableStateFlow(TestLabUiState())
-    private val dayStart = LocalDate.now()
-        .atStartOfDay(ZoneId.systemDefault())
-        .toInstant()
-        .toEpochMilli()
 
-    val uiState: StateFlow<MainUiState> = combine(
-        container.settingsRepository.settings,
-        container.attentionRepository.recentEvents(),
+    /**
+     * Start of the current day, re-emitted when the day changes.
+     *
+     * This used to be captured once when the ViewModel was constructed, so an app left resident
+     * past midnight kept counting "today" from the previous day until the process died. Sleeps
+     * until the next midnight rather than polling.
+     */
+    private val dayStart: Flow<Long> = flow {
+        while (true) {
+            val startOfToday = LocalDate.now()
+                .atStartOfDay(ZoneId.systemDefault())
+                .toInstant()
+                .toEpochMilli()
+            emit(startOfToday)
+            val untilMidnight = startOfToday + TimeConstants.DAY_MILLIS -
+                System.currentTimeMillis()
+            delay(untilMidnight.coerceAtLeast(MINIMUM_TICK_MILLIS))
+        }
+    }.distinctUntilChanged()
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    private val dashboardStats: Flow<DashboardStats> = dayStart.flatMapLatest { since ->
         combine(
-            container.attentionRepository.receivedSince(dayStart),
-            container.attentionRepository.importantSince(dayStart),
-            container.attentionRepository.queuedSince(dayStart),
+            container.attentionRepository.receivedSince(since),
+            container.attentionRepository.importantSince(since),
+            container.attentionRepository.queuedSince(since),
             combine(
                 container.attentionRepository.trainingCount(),
                 container.attentionRepository.personalizedModelProgress(),
@@ -115,7 +149,13 @@ class MainViewModel(private val container: AppContainer) : ViewModel() {
                 learning.personalizedModel,
                 learning.averageAnalysisMillis,
             )
-        },
+        }
+    }
+
+    val uiState: StateFlow<MainUiState> = combine(
+        container.settingsRepository.settings,
+        container.attentionRepository.recentEvents(),
+        dashboardStats,
         testLabState,
     ) { settings, events, counts, testLab ->
         MainUiState(
@@ -258,5 +298,10 @@ class MainViewModel(private val container: AppContainer) : ViewModel() {
         override fun <T : ViewModel> create(modelClass: Class<T>): T {
             return MainViewModel(container) as T
         }
+    }
+
+    private companion object {
+        /** Guards against a zero or negative sleep if the clock moves during the wait. */
+        const val MINIMUM_TICK_MILLIS = 1_000L
     }
 }

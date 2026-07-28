@@ -5,6 +5,7 @@ import com.attentionos.BuildConfig
 import com.attentionos.core.common.TimeConstants
 import com.attentionos.data.db.AttentionDao
 import com.attentionos.data.db.NotificationEventEntity
+import com.attentionos.data.db.NotificationListItem
 import com.attentionos.data.db.PersonalizedModelEntity
 import com.attentionos.data.db.TrainingExampleEntity
 import com.attentionos.data.db.UserMemoryEntity
@@ -39,7 +40,7 @@ class AttentionRepository(
     private var modelLoaded = false
     private var cachedModel: PersonalizedModelState? = null
 
-    fun recentEvents(): Flow<List<NotificationEventEntity>> = dao.observeRecent()
+    fun recentEvents(): Flow<List<NotificationListItem>> = dao.observeRecent()
     fun importantEvents(): Flow<List<NotificationEventEntity>> = dao.observeImportant()
     fun queuedEvents(): Flow<List<NotificationEventEntity>> = dao.observeQueued()
     fun receivedSince(since: Long): Flow<Int> = dao.observeReceivedSince(since)

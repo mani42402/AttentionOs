@@ -13,8 +13,23 @@ interface AttentionDao {
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insertEvent(event: NotificationEventEntity): Long
 
-    @Query("SELECT * FROM notification_events ORDER BY postedAt DESC LIMIT :limit")
-    fun observeRecent(limit: Int = 60): Flow<List<NotificationEventEntity>>
+    /**
+     * Recent events as a list projection.
+     *
+     * Selects only the columns the UI renders; notably it reports whether an embedding exists
+     * rather than loading the blob itself, which the list never displays.
+     */
+    @Query(
+        """
+        SELECT id, notificationKey, appLabel, title, message, postedAt, priority, category,
+               explanation, queued, action, personalProbability, personalModelApplied,
+               (embeddingQ8 IS NOT NULL) AS hasEmbedding
+        FROM notification_events
+        ORDER BY postedAt DESC
+        LIMIT :limit
+        """,
+    )
+    fun observeRecent(limit: Int = 60): Flow<List<NotificationListItem>>
 
     @Query(
         """
