@@ -57,11 +57,13 @@ import com.attentionos.ui.components.ActionSettingRow
 import com.attentionos.ui.components.ScreenHeader
 import com.attentionos.ui.components.SettingsGroup
 import com.attentionos.ui.components.SoftDivider
+import com.attentionos.ui.components.ThemeModeSelector
 import com.attentionos.ui.components.ToggleSettingRow
 import com.attentionos.ui.insights.ControlStatusCard
 import com.attentionos.ui.theme.Coral500
 import com.attentionos.ui.theme.Mint500
 import com.attentionos.ui.theme.Sun500
+import com.attentionos.ui.theme.ThemeMode
 
 @Composable
 internal fun SettingsScreen(
@@ -79,7 +81,8 @@ internal fun SettingsScreen(
     onMediumVibrationChanged: (Boolean) -> Unit,
     onReminderChanged: (Boolean) -> Unit,
     onReminderTimesChanged: (Set<Int>) -> Unit,
-    onDarkThemeChanged: (Boolean) -> Unit,
+    onThemeModeChanged: (ThemeMode) -> Unit,
+    onDynamicColorChanged: (Boolean) -> Unit,
     onMotionChanged: (Boolean) -> Unit,
     onScreenSecurityChanged: (Boolean) -> Unit,
     onRequestNotificationPermission: () -> Unit,
@@ -223,16 +226,9 @@ internal fun SettingsScreen(
         }
         item {
             SettingsGroup(title = stringResource(R.string.settings_appearance_effects)) {
-                ToggleSettingRow(
-                    icon = Icons.Default.Star,
-                    title = stringResource(R.string.settings_dark_appearance),
-                    subtitle = if (state.settings.darkTheme) {
-                        "Midnight theme is active"
-                    } else {
-                        "Light theme is active"
-                    },
-                    checked = state.settings.darkTheme,
-                    onCheckedChange = onDarkThemeChanged,
+                ThemeModeSelector(
+                    selected = ThemeMode.fromStorage(state.settings.themeMode),
+                    onSelected = onThemeModeChanged,
                 )
                 SoftDivider()
                 ToggleSettingRow(

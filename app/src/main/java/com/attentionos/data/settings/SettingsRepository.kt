@@ -8,6 +8,7 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
+import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
@@ -30,7 +31,10 @@ data class AppSettings(
     val mediumVibration: Boolean = false,
     val reviewReminderEnabled: Boolean = false,
     val reviewReminderTimes: Set<Int> = setOf(19 * 60),
-    val darkTheme: Boolean = false,
+    /** Stored name of a [com.attentionos.ui.theme.ThemeMode]; defaults to following the system. */
+    val themeMode: String = "System",
+    /** Material You: adopt the wallpaper palette instead of the brand palette. */
+    val dynamicColor: Boolean = false,
     val motionEnabled: Boolean = true,
     /** When true the window is FLAG_SECURE: no screenshots, no recents thumbnail. */
     val screenSecurity: Boolean = true,
@@ -58,7 +62,8 @@ class SettingsRepository(private val context: Context) {
                 ?.toSet()
                 ?.takeIf(Set<Int>::isNotEmpty)
                 ?: setOf((values[REVIEW_REMINDER_HOUR] ?: 19) * 60),
-            darkTheme = values[DARK_THEME] ?: false,
+            themeMode = values[THEME_MODE] ?: "System",
+            dynamicColor = values[DYNAMIC_COLOR] ?: false,
             motionEnabled = values[MOTION_ENABLED] ?: true,
             screenSecurity = values[SCREEN_SECURITY] ?: true,
             onboardingComplete = values[ONBOARDING_COMPLETE] ?: false,
@@ -77,7 +82,11 @@ class SettingsRepository(private val context: Context) {
     suspend fun setMediumVibration(enabled: Boolean) = update(MEDIUM_VIBRATION, enabled)
     suspend fun setReviewReminderEnabled(enabled: Boolean) =
         update(REVIEW_REMINDER_ENABLED, enabled)
-    suspend fun setDarkTheme(enabled: Boolean) = update(DARK_THEME, enabled)
+    suspend fun setThemeMode(mode: String) {
+        context.settingsDataStore.edit { it[THEME_MODE] = mode }
+    }
+
+    suspend fun setDynamicColor(enabled: Boolean) = update(DYNAMIC_COLOR, enabled)
     suspend fun setMotionEnabled(enabled: Boolean) = update(MOTION_ENABLED, enabled)
 
     suspend fun setScreenSecurity(enabled: Boolean) = update(SCREEN_SECURITY, enabled)
@@ -136,7 +145,8 @@ class SettingsRepository(private val context: Context) {
         val REVIEW_REMINDER_ENABLED = booleanPreferencesKey("review_reminder_enabled")
         val REVIEW_REMINDER_HOUR = intPreferencesKey("review_reminder_hour")
         val REVIEW_REMINDER_TIMES = stringSetPreferencesKey("review_reminder_times")
-        val DARK_THEME = booleanPreferencesKey("dark_theme")
+        val THEME_MODE = stringPreferencesKey("theme_mode")
+        val DYNAMIC_COLOR = booleanPreferencesKey("dynamic_color")
         val MOTION_ENABLED = booleanPreferencesKey("motion_enabled")
         val SCREEN_SECURITY = booleanPreferencesKey("screen_security")
         val ONBOARDING_COMPLETE = booleanPreferencesKey("onboarding_complete")
