@@ -7,6 +7,7 @@ import com.attentionos.core.common.TimeConstants
 import com.attentionos.core.di.AppContainer
 import com.attentionos.data.db.NotificationListItem
 import com.attentionos.data.repository.AttentionTestResult
+import com.attentionos.data.repository.StorageSummary
 import com.attentionos.data.repository.UserAction
 import com.attentionos.data.settings.AppSettings
 import com.attentionos.training.ExportResult
@@ -175,6 +176,18 @@ class MainViewModel(private val container: AppContainer) : ViewModel() {
         started = SharingStarted.WhileSubscribed(5_000),
         initialValue = MainUiState(),
     )
+
+    /**
+     * What the app is storing, for Settings. Cold until observed, so the counts cost nothing
+     * unless the user opens the dashboard.
+     */
+    val storage: StateFlow<StorageSummary> = container.attentionRepository
+        .storageSummary(container::databaseBytes)
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5_000),
+            initialValue = StorageSummary(),
+        )
 
     val events = MutableSharedFlow<UiEvent>(extraBufferCapacity = 1)
 

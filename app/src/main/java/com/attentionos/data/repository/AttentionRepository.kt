@@ -33,6 +33,7 @@ import java.time.Instant
 import java.time.ZoneId
 import kotlin.math.roundToLong
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -54,6 +55,28 @@ class AttentionRepository(
     fun importantSince(since: Long): Flow<Int> = dao.observeImportantSince(since)
     fun queuedSince(since: Long): Flow<Int> = dao.observeQueuedSince(since)
     fun trainingCount(): Flow<Int> = dao.observeTrainingCount()
+
+    /**
+     * What is actually on disk right now, for the privacy dashboard.
+     *
+     * The app asks users to trust a claim about local storage; this lets them check it instead.
+     */
+    fun storageSummary(databaseBytes: () -> Long): Flow<StorageSummary> = combine(
+        dao.observeEventCount(),
+        dao.observeSenderCount(),
+        dao.observeTrainingCount(),
+        dao.observeStoredContentCount(),
+        dao.observeOldestEventAt(),
+    ) { events, senders, training, withContent, oldest ->
+        StorageSummary(
+            notificationCount = events,
+            senderCount = senders,
+            trainingExampleCount = training,
+            storedContentCount = withContent,
+            oldestEventAt = oldest?.takeIf { it > 0 },
+            databaseBytes = databaseBytes(),
+        )
+    }
     /** Average inference latency over the recent window shown in the UI. */
     fun averageAnalysisMillis(): Flow<Double?> = dao.observeAverageAnalysisMillis(
         since = System.currentTimeMillis() - LATENCY_WINDOW_MILLIS,
@@ -710,3 +733,14 @@ enum class UserAction {
     IMPORTANT,
     NOT_IMPORTANT,
 }
+
+/** A plain-language snapshot of everything the app is storing locally. */
+data class StorageSummary(
+    val notificationCount: Int = 0,
+    val senderCount: Int = 0,
+    val trainingExampleCount: Int = 0,
+    /** Rows that hold actual notification text; zero unless the user opted in. */
+    val storedContentCount: Int = 0,
+    val oldestEventAt: Long? = null,
+    val databaseBytes: Long = 0,
+)

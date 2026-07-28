@@ -70,6 +70,19 @@ interface AttentionDao {
     @Query("SELECT COUNT(*) FROM training_examples")
     fun observeTrainingCount(): Flow<Int>
 
+    @Query("SELECT COUNT(*) FROM notification_events")
+    fun observeEventCount(): Flow<Int>
+
+    @Query("SELECT COUNT(*) FROM user_memory")
+    fun observeSenderCount(): Flow<Int>
+
+    /** How many stored rows actually hold notification text, i.e. the opt-in content. */
+    @Query("SELECT COUNT(*) FROM notification_events WHERE title IS NOT NULL OR message IS NOT NULL")
+    fun observeStoredContentCount(): Flow<Int>
+
+    @Query("SELECT MIN(postedAt) FROM notification_events")
+    fun observeOldestEventAt(): Flow<Long?>
+
     /**
      * Recent inference latency.
      *

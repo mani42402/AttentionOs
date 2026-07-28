@@ -31,7 +31,7 @@ import net.zetetic.database.sqlcipher.SupportOpenHelperFactory
  * application-lifetime scope rather than one per component.
  */
 class AppContainer(
-    application: Application,
+    private val application: Application,
     private val applicationScope: CoroutineScope,
 ) {
     val keyManager: KeyManager by lazy { KeyManager(application) }
@@ -117,6 +117,13 @@ class AppContainer(
             keyManager = keyManager,
             onSettingsCleared = settingsRepository::clearAll,
         )
+    }
+
+    /** On-disk size of the encrypted database, including its write-ahead log. */
+    fun databaseBytes(): Long {
+        val base = application.getDatabasePath(DATABASE_NAME)
+        return listOf("", "-wal", "-shm")
+            .sumOf { java.io.File("${base.absolutePath}$it").length() }
     }
 
     fun warmLanguageModel() {

@@ -4,8 +4,8 @@ import android.Manifest
 import android.content.Intent
 import android.os.Build
 import android.os.Bundle
-import android.view.WindowManager
 import android.provider.Settings
+import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -34,24 +34,25 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.navigation.compose.currentBackStackEntryAsState
+import androidx.navigation.compose.rememberNavController
+import com.attentionos.data.repository.StorageSummary
+import com.attentionos.service.ReviewReminderWorker
 import com.attentionos.ui.MainUiState
 import com.attentionos.ui.MainViewModel
 import com.attentionos.ui.UiEvent
-import com.attentionos.ui.theme.AttentionTheme
-import com.attentionos.ui.theme.Forest950
-import com.attentionos.service.ReviewReminderWorker
 import com.attentionos.ui.components.rememberNotificationAccess
 import com.attentionos.ui.home.DashboardScreen
 import com.attentionos.ui.insights.SimpleSummaryScreen
 import com.attentionos.ui.navigation.AppDestination
-import androidx.navigation.compose.rememberNavController
-import androidx.navigation.compose.currentBackStackEntryAsState
 import com.attentionos.ui.navigation.AttentionNavHost
-import com.attentionos.ui.navigation.navigateToTab
 import com.attentionos.ui.navigation.HelperBottomBar
+import com.attentionos.ui.navigation.navigateToTab
 import com.attentionos.ui.onboarding.OnboardingScreen
 import com.attentionos.ui.review.ActivityScreen
 import com.attentionos.ui.settings.SettingsScreen
+import com.attentionos.ui.theme.AttentionTheme
+import com.attentionos.ui.theme.Forest950
 import kotlinx.coroutines.flow.MutableStateFlow
 
 class MainActivity : ComponentActivity() {
@@ -91,6 +92,7 @@ class MainActivity : ComponentActivity() {
                 motionEnabled = uiState.settings.motionEnabled,
             ) {
                 val reviewRequest by openReviewRequest.collectAsStateWithLifecycle()
+                val storage by viewModel.storage.collectAsStateWithLifecycle()
                 val snackbar = remember { SnackbarHostState() }
 
                 LaunchedEffect(Unit) {
@@ -156,6 +158,7 @@ class MainActivity : ComponentActivity() {
                         onResetPersonalizedModel = viewModel::resetPersonalizedModel,
                         onRunTestLab = viewModel::runTestLab,
                         onDelete = viewModel::deleteAllData,
+                        storage = storage,
                         onFeedback = viewModel::submitFeedback,
                         onOpenNotificationAccess = {
                             startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
@@ -218,6 +221,7 @@ private fun AttentionApp(
     onResetPersonalizedModel: () -> Unit,
     onRunTestLab: () -> Unit,
     onDelete: () -> Unit,
+    storage: StorageSummary,
     onFeedback: (String, Boolean) -> Unit,
     onOpenNotificationAccess: () -> Unit,
 ) {
@@ -292,6 +296,7 @@ private fun AttentionApp(
                         onExport = onExport,
                         onResetPersonalizedModel = onResetPersonalizedModel,
                         onDelete = onDelete,
+                        storage = storage,
                     )
                 },
             )
