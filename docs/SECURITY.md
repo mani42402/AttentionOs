@@ -112,6 +112,16 @@ system share sheet.
 If opt-in cloud sync ships, encryption happens before anything is uploaded, and the network
 capability arrives with a user-visible record of every request.
 
+## Before shipping a release build
+
+R8 minification is enabled for release. SQLCipher and ONNX Runtime are both reached through
+JNI, so their classes are kept explicitly in `proguard-rules.pro` — without that a release
+build can lose the database layer in a way that never shows up in debug.
+
+This has been verified to *build*, but a signed release has not been run on a device. Do that
+once before the first ship: install a signed release APK, confirm the database still opens and
+a notification is still classified.
+
 ## Known gaps
 
 - Backups are not yet implemented, so a lost or reset device loses the learned model. The
