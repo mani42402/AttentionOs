@@ -3,6 +3,7 @@ package com.attentionos.ai
 import ai.onnxruntime.OnnxTensor
 import ai.onnxruntime.OrtEnvironment
 import ai.onnxruntime.OrtSession
+import ai.onnxruntime.TensorInfo
 import android.content.Context
 import android.os.SystemClock
 import android.util.Log
@@ -13,8 +14,6 @@ import com.attentionos.domain.LanguageAnalyzer
 import com.attentionos.domain.NotificationCategory
 import java.io.File
 import java.nio.LongBuffer
-import java.text.Normalizer
-import java.util.Locale
 import kotlin.math.sqrt
 
 /**
@@ -51,9 +50,16 @@ class MiniLmLanguageAnalyzer(
             synchronized(inferenceLock) {
                 val startedAt = SystemClock.elapsedRealtime()
                 val embedding = active.embed(content)
-                val categoryMatch = active.categoryEmbeddings
-                    .maxByOrNull { (_, prototype) -> cosine(embedding, prototype) }
-                val categoryScore = categoryMatch?.let { cosine(embedding, it.value) } ?: -1f
+                // Score each prototype once; the previous form re-scored the winner.
+                var categoryMatch: NotificationCategory? = null
+                var categoryScore = -1f
+                active.categoryEmbeddings.forEach { (category, prototype) ->
+                    val score = cosine(embedding, prototype)
+                    if (score > categoryScore) {
+                        categoryScore = score
+                        categoryMatch = category
+                    }
+                }
                 val urgentSimilarity = cosine(embedding, active.urgentEmbedding)
                 val routineSimilarity = cosine(embedding, active.routineEmbedding)
                 val semanticUrgency = (
@@ -62,11 +68,8 @@ class MiniLmLanguageAnalyzer(
 
                 LanguageAnalysis(
                     urgency = maxOf(fallbackResult.urgency, semanticUrgency),
-                    category = if (categoryScore >= CATEGORY_THRESHOLD) {
-                        categoryMatch!!.key
-                    } else {
-                        fallbackResult.category
-                    },
+                    category = categoryMatch?.takeIf { categoryScore >= CATEGORY_THRESHOLD }
+                        ?: fallbackResult.category,
                     semanticEmbedding = embedding,
                     modelVersion = MODEL_VERSION,
                 ).also {
@@ -87,7 +90,12 @@ class MiniLmLanguageAnalyzer(
         return synchronized(inferenceLock) {
             runtime?.let { return@synchronized it }
             runCatching { createRuntime() }
-                .onFailure { unavailable = true }
+                .onFailure { failure ->
+                    unavailable = true
+                    // Previously swallowed. A silent disable means the app reports keyword
+                    // results as though the model ran, with no way to tell from a bug report.
+                    Log.w(LOG_TAG, "MiniLM unavailable; falling back to keyword analysis", failure)
+                }
                 .getOrNull()
                 ?.also { runtime = it }
         }
@@ -99,14 +107,26 @@ class MiniLmLanguageAnalyzer(
         val tokenizer = WordPieceTokenizer(
             context.assets.open(VOCAB_ASSET).bufferedReader().use { it.readLines() },
         )
+        check(tokenizer.vocabularySize == EXPECTED_VOCABULARY_SIZE) {
+            "MiniLM vocabulary has ${tokenizer.vocabularySize} entries, " +
+                "expected $EXPECTED_VOCABULARY_SIZE"
+        }
+
         val environment = OrtEnvironment.getEnvironment()
         val options = OrtSession.SessionOptions().apply {
             setIntraOpNumThreads(1)
             setInterOpNumThreads(1)
             setOptimizationLevel(OrtSession.SessionOptions.OptLevel.ALL_OPT)
+            // Cache the optimized graph so ALL_OPT is not re-run on every process start.
+            runCatching { setOptimizedModelFilePath(optimizedModelFile().absolutePath) }
         }
         val session = environment.createSession(modelFile.absolutePath, options)
-        val base = RuntimeState(environment, session, tokenizer)
+        val base = RuntimeState(
+            environment = environment,
+            session = session,
+            tokenizer = tokenizer,
+            dynamicSequence = hasDynamicSequenceAxis(session),
+        )
 
         return base.copy(
             categoryEmbeddings = categoryPrototypes.mapValues { base.embed(it.value) },
@@ -115,21 +135,55 @@ class MiniLmLanguageAnalyzer(
         ).also {
             Log.i(
                 LOG_TAG,
-                "MiniLM transformer ready in ${SystemClock.elapsedRealtime() - startedAt}ms",
+                "MiniLM ready in ${SystemClock.elapsedRealtime() - startedAt}ms " +
+                    "(dynamicSequence=${base.dynamicSequence})",
             )
         }
     }
 
+    /**
+     * True when the model's sequence axis is symbolic, which lets us size each forward pass to
+     * the actual token count. Detected rather than assumed: if a future model pins the axis,
+     * padding to [MAX_TOKENS] remains correct instead of failing at inference time.
+     */
+    private fun hasDynamicSequenceAxis(session: OrtSession): Boolean = runCatching {
+        val info = session.inputInfo["input_ids"]?.info as? TensorInfo
+        val shape = info?.shape ?: return false
+        shape.size >= 2 && shape[1] <= 0L
+    }.getOrDefault(false)
+
+    private fun optimizedModelFile(): File =
+        File(context.noBackupFilesDir, "models").apply { mkdirs() }
+            .let { File(it, "$MODEL_FILENAME.opt") }
+
+    /**
+     * Copies the bundled model into private storage via a temp file and an atomic rename.
+     *
+     * The previous implementation wrote in place and guarded only on a minimum size, so a copy
+     * interrupted between that threshold and the true length left a truncated file that passed
+     * the check on every subsequent launch — permanently disabling the model. Verifying the
+     * exact length makes a partial copy self-healing.
+     */
     private fun copyModelToPrivateStorage(): File {
         val modelDirectory = File(context.noBackupFilesDir, "models").apply { mkdirs() }
         val output = File(modelDirectory, MODEL_FILENAME)
-        if (!output.exists() || output.length() < MIN_MODEL_BYTES) {
-            context.assets.open(MODEL_ASSET).use { input ->
-                output.outputStream().buffered().use { destination ->
-                    input.copyTo(destination, bufferSize = 64 * 1024)
-                }
+        val expectedBytes = context.assets.openFd(MODEL_ASSET).use { it.length }
+
+        if (output.exists() && output.length() == expectedBytes) return output
+
+        val temporary = File(modelDirectory, "$MODEL_FILENAME.tmp")
+        temporary.delete()
+        context.assets.open(MODEL_ASSET).use { input ->
+            temporary.outputStream().buffered().use { destination ->
+                input.copyTo(destination, bufferSize = COPY_BUFFER_BYTES)
+                destination.flush()
             }
         }
+        check(temporary.length() == expectedBytes) {
+            "Model copy is ${temporary.length()} bytes, expected $expectedBytes"
+        }
+        output.delete()
+        check(temporary.renameTo(output)) { "Could not install model file" }
         return output
     }
 
@@ -137,33 +191,44 @@ class MiniLmLanguageAnalyzer(
         val environment: OrtEnvironment,
         val session: OrtSession,
         val tokenizer: WordPieceTokenizer,
+        val dynamicSequence: Boolean = false,
         val categoryEmbeddings: Map<NotificationCategory, FloatArray> = emptyMap(),
         val urgentEmbedding: FloatArray = FloatArray(EMBEDDING_SIZE),
         val routineEmbedding: FloatArray = FloatArray(EMBEDDING_SIZE),
     ) {
         fun embed(text: String): FloatArray {
-            val tokens = tokenizer.encode(text, MAX_TOKENS)
+            val encoded = tokenizer.encode(text, MAX_TOKENS)
+            // A typical notification is 8-20 tokens. When the model's sequence axis is
+            // symbolic, bucket up to the next power of two instead of always padding to 64,
+            // which cuts the per-notification forward pass several-fold at no accuracy cost.
+            val width = if (dynamicSequence) bucketWidth(encoded.size) else MAX_TOKENS
+            val ids = encoded.ids.copyOf(width)
+            val mask = encoded.mask.copyOf(width)
+
             val inputs = mutableMapOf<String, OnnxTensor>()
-            inputs["input_ids"] = tensor(tokens.ids)
-            inputs["attention_mask"] = tensor(tokens.mask)
+            inputs["input_ids"] = tensor(ids)
+            inputs["attention_mask"] = tensor(mask)
             if ("token_type_ids" in session.inputNames) {
-                inputs["token_type_ids"] = tensor(LongArray(MAX_TOKENS))
+                inputs["token_type_ids"] = tensor(LongArray(width))
             }
 
             return try {
                 session.run(inputs).use { result ->
-                    meanPool(result[0].value, tokens.mask)
+                    meanPool(result[0].value, mask)
                 }
             } finally {
                 inputs.values.forEach(OnnxTensor::close)
             }
         }
 
+        private fun bucketWidth(tokenCount: Int): Int =
+            SEQUENCE_BUCKETS.firstOrNull { it >= tokenCount } ?: MAX_TOKENS
+
         private fun tensor(values: LongArray): OnnxTensor =
             OnnxTensor.createTensor(
                 environment,
                 LongBuffer.wrap(values),
-                longArrayOf(1, MAX_TOKENS.toLong()),
+                longArrayOf(1, values.size.toLong()),
             )
 
         private fun meanPool(output: Any, mask: LongArray): FloatArray {
@@ -186,72 +251,22 @@ class MiniLmLanguageAnalyzer(
         }
     }
 
-    private class WordPieceTokenizer(vocabulary: List<String>) {
-        private val tokenIds = vocabulary.withIndex().associate { it.value to it.index.toLong() }
-        private val unknown = tokenIds["[UNK]"] ?: 100L
-        private val classification = tokenIds["[CLS]"] ?: 101L
-        private val separator = tokenIds["[SEP]"] ?: 102L
-
-        fun encode(text: String, maxTokens: Int): EncodedTokens {
-            val pieces = basicTokens(text).flatMap(::wordPieces)
-            val ids = LongArray(maxTokens)
-            val mask = LongArray(maxTokens)
-            var index = 0
-            ids[index] = classification
-            mask[index++] = 1
-            pieces.take(maxTokens - 2).forEach { piece ->
-                ids[index] = tokenIds[piece] ?: unknown
-                mask[index++] = 1
-            }
-            ids[index] = separator
-            mask[index] = 1
-            return EncodedTokens(ids, mask)
-        }
-
-        private fun basicTokens(input: String): List<String> {
-            val normalized = Normalizer.normalize(
-                input.lowercase(Locale.ROOT),
-                Normalizer.Form.NFD,
-            ).replace(Regex("\\p{Mn}+"), "")
-            return TOKEN_PATTERN.findAll(normalized).map { it.value }.toList()
-        }
-
-        private fun wordPieces(token: String): List<String> {
-            if (token.length > 100) return listOf("[UNK]")
-            val output = mutableListOf<String>()
-            var start = 0
-            while (start < token.length) {
-                var end = token.length
-                var match: String? = null
-                while (start < end) {
-                    val candidate = (if (start == 0) "" else "##") + token.substring(start, end)
-                    if (candidate in tokenIds) {
-                        match = candidate
-                        break
-                    }
-                    end--
-                }
-                if (match == null) return listOf("[UNK]")
-                output += match
-                start = end
-            }
-            return output
-        }
-    }
-
-    private data class EncodedTokens(val ids: LongArray, val mask: LongArray)
-
     private companion object {
         const val MODEL_ASSET = "models/minilm-l3-qint8-arm64.onnx"
         const val VOCAB_ASSET = "models/minilm-vocab.txt"
         const val MODEL_FILENAME = "minilm-l3-qint8-arm64.onnx"
         const val MODEL_VERSION = "paraphrase-MiniLM-L3-v2-qint8-arm64"
-        const val MIN_MODEL_BYTES = 16_000_000L
         const val MAX_TOKENS = 64
         const val EMBEDDING_SIZE = 384
         const val CATEGORY_THRESHOLD = 0.22f
         const val LOG_TAG = "AttentionAI"
-        val TOKEN_PATTERN = Regex("[\\p{L}\\p{N}]+|[^\\s\\p{L}\\p{N}]")
+        const val COPY_BUFFER_BYTES = 64 * 1024
+
+        /** bert-base-uncased vocabulary; a mismatch means the wrong asset shipped. */
+        const val EXPECTED_VOCABULARY_SIZE = 30_522
+
+        /** Sequence lengths the encoder is run at, smallest fitting bucket wins. */
+        val SEQUENCE_BUCKETS = intArrayOf(16, 32, MAX_TOKENS)
 
         const val URGENT_PROTOTYPE =
             "This is an emergency requiring immediate action and a fast response."
