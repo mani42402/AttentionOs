@@ -10,6 +10,9 @@ import androidx.room.PrimaryKey
         Index("notificationKey", unique = true),
         Index("postedAt"),
         Index("senderHash"),
+        Index("priority"),
+        Index("queued"),
+        Index(value = ["action", "postedAt"]),
     ],
 )
 data class NotificationEventEntity(

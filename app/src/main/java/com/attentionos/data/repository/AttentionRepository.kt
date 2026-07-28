@@ -46,7 +46,10 @@ class AttentionRepository(
     fun importantSince(since: Long): Flow<Int> = dao.observeImportantSince(since)
     fun queuedSince(since: Long): Flow<Int> = dao.observeQueuedSince(since)
     fun trainingCount(): Flow<Int> = dao.observeTrainingCount()
-    fun averageAnalysisMillis(): Flow<Double?> = dao.observeAverageAnalysisMillis()
+    /** Average inference latency over the recent window shown in the UI. */
+    fun averageAnalysisMillis(): Flow<Double?> = dao.observeAverageAnalysisMillis(
+        since = System.currentTimeMillis() - LATENCY_WINDOW_MILLIS,
+    )
     fun personalizedModelProgress(): Flow<PersonalizedModelProgress> =
         dao.observePersonalizedModel().map { model ->
             PersonalizedModelProgress(
@@ -483,6 +486,7 @@ class AttentionRepository(
 
     private companion object {
         const val HIGH_PRIORITY_THRESHOLD = 0.68f
+        const val LATENCY_WINDOW_MILLIS = 7L * TimeConstants.DAY_MILLIS
 
         val testScenarios = listOf(
             TestScenario(

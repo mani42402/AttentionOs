@@ -39,6 +39,7 @@ class AppContainer(
                 AttentionDatabase.MIGRATION_2_3,
                 AttentionDatabase.MIGRATION_3_4,
                 AttentionDatabase.MIGRATION_4_5,
+                AttentionDatabase.MIGRATION_5_6,
             )
             .fallbackToDestructiveMigration(dropAllTables = true)
             .build()

@@ -11,20 +11,35 @@ import java.time.ZonedDateTime
 import java.util.concurrent.TimeUnit
 
 object ReviewReminderScheduler {
+
+    /**
+     * Fingerprint of the schedule this process last applied.
+     *
+     * The settings flow re-emits on every process start, and [sync] cancels and rebuilds every
+     * reminder task. Without this guard each launch rewrote the WorkManager database and reset
+     * the reminder schedule even when nothing had changed.
+     */
+    @Volatile
+    private var appliedFingerprint: String? = null
+
     fun sync(context: Context, enabled: Boolean, times: Set<Int>) {
-        val workManager = WorkManager.getInstance(context)
-        workManager.cancelAllWorkByTag(WORK_TAG)
-        workManager.cancelUniqueWork(LEGACY_WORK_NAME)
-        if (!enabled) {
-            return
-        }
-        val now = ZonedDateTime.now()
-        times
-            .asSequence()
+        val normalizedTimes = times
             .filter { it in 0 until TimeConstants.MINUTES_PER_DAY }
             .distinct()
             .sorted()
             .take(TimeConstants.MAX_DAILY_REMINDERS)
+        val fingerprint = "$enabled:${normalizedTimes.joinToString(",")}"
+        if (fingerprint == appliedFingerprint) return
+
+        val workManager = WorkManager.getInstance(context)
+        workManager.cancelAllWorkByTag(WORK_TAG)
+        workManager.cancelUniqueWork(LEGACY_WORK_NAME)
+        if (!enabled) {
+            appliedFingerprint = fingerprint
+            return
+        }
+        val now = ZonedDateTime.now()
+        normalizedTimes
             .forEach { minuteOfDay ->
                 val request = PeriodicWorkRequestBuilder<ReviewReminderWorker>(
                     24,
@@ -45,6 +60,12 @@ object ReviewReminderScheduler {
                     request,
                 )
             }
+        appliedFingerprint = fingerprint
+    }
+
+    /** Test-only: clears the memoised schedule so each case starts from a clean slate. */
+    internal fun resetForTesting() {
+        appliedFingerprint = null
     }
 
     internal fun initialDelayMillis(now: ZonedDateTime, minuteOfDay: Int): Long {

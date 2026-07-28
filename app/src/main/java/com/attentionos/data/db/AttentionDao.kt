@@ -55,13 +55,21 @@ interface AttentionDao {
     @Query("SELECT COUNT(*) FROM training_examples")
     fun observeTrainingCount(): Flow<Int>
 
+    /**
+     * Recent inference latency.
+     *
+     * Bounded by [since] so this is an index-assisted range scan rather than a full-table
+     * average. It is observed by the UI and therefore re-runs on every notification insert,
+     * which made an unbounded scan over the full retention window the most expensive query
+     * in the app.
+     */
     @Query(
         """
         SELECT AVG(analysisDurationMillis) FROM notification_events
-        WHERE analysisDurationMillis > 0
+        WHERE analysisDurationMillis > 0 AND postedAt >= :since
         """,
     )
-    fun observeAverageAnalysisMillis(): Flow<Double?>
+    fun observeAverageAnalysisMillis(since: Long): Flow<Double?>
 
     @Query("SELECT * FROM training_examples WHERE exported = 0 ORDER BY createdAt LIMIT :limit")
     suspend fun trainingForExport(limit: Int = 10_000): List<TrainingExampleEntity>
