@@ -81,6 +81,11 @@ android {
         freeCompilerArgs += listOf("-Xjvm-default=all")
     }
 
+    sourceSets {
+        // MigrationTestHelper reads the exported schema JSON from instrumentation assets.
+        getByName("androidTest").assets.srcDirs("$projectDir/schemas")
+    }
+
     androidResources {
         // Keep the ONNX model uncompressed so it can be memory-mapped from the APK
         // instead of being inflated into a second on-disk copy.
