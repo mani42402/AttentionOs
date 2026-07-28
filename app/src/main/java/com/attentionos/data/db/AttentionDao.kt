@@ -86,6 +86,25 @@ interface AttentionDao {
     )
     fun observeAverageAnalysisMillis(since: Long): Flow<Double?>
 
+    /**
+     * Corrected events that still carry an embedding from the current encoder.
+     *
+     * The replay buffer for refitting. Filtering on languageModelVersion matters: embeddings
+     * from a previous encoder describe a different space, and mixing them in would train the
+     * classifier on incompatible features.
+     */
+    @Query(
+        """
+        SELECT * FROM notification_events
+        WHERE action IN ('IMPORTANT', 'NOT_IMPORTANT')
+          AND embeddingQ8 IS NOT NULL
+          AND languageModelVersion = :modelVersion
+        ORDER BY actedAt DESC
+        LIMIT :limit
+        """,
+    )
+    suspend fun correctedEvents(modelVersion: String, limit: Int = 2_000): List<NotificationEventEntity>
+
     @Query("SELECT * FROM training_examples WHERE exported = 0 ORDER BY createdAt LIMIT :limit")
     suspend fun trainingForExport(limit: Int = 10_000): List<TrainingExampleEntity>
 

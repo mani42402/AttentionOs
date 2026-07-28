@@ -48,6 +48,46 @@ alongside "right now". This is exactly the gap personalization is meant to close
 tracked as a quality metric rather than patched with more keywords — widening the keyword list
 until a test passes would be fitting the rules to the test set.
 
+## Personalization
+
+Frozen encoder, small trainable head — the right shape at 50–500 examples, where fine-tuning the
+encoder would overfit.
+
+**Replay-buffer refit.** The classifier is re-fit from scratch over every stored correction
+instead of taking one gradient step per correction. One-pass online learning sees the third
+example once, at a large learning rate, and never again: it underfits and the result depends on
+the order corrections happened to arrive. Since embeddings are already persisted, the whole set
+can simply be re-fit — a few thousand examples over 30 epochs costs milliseconds. Tests pin both
+properties: refit is at least as accurate as the online pass on the same data, and reversing the
+input order moves the weights by <0.05.
+
+Classes are weighted by inverse frequency. Resampling was rejected: peer-reviewed evidence shows
+it leaves accuracy unchanged while degrading calibration, and calibration is what matters here
+because the probability is blended into a score and re-bucketed into five levels.
+
+**Centroid cold-start.** Class means over the embeddings become usable at 3 corrections per
+class, where a 390-weight classifier is still noise. This is the fix for the real problem: the
+classifier could not act until 50 corrections *plus* four evaluation gates, a bar most users
+never reach, so "it learns from you" was theoretical for them. The blend hands over gradually —
+centroids dominate while examples are scarce, the classifier takes over as it earns its keep.
+
+Centroids widen *when* personalization can help, never *whether* it is allowed to. The seven-day
+shadow pilot and every evaluation gate still hold, and the no-downgrade rule for protected
+categories is unchanged.
+
+### Deliberately deferred
+
+Two refinements from the original plan are not implemented, because they cost a feature-space
+version bump each and the two above carry most of the value:
+
+- **Hashed per-package bias feature** — would let the model learn "this workspace always matters"
+  in 2–3 corrections rather than dozens.
+- **Five-class ordinal head** — the model currently predicts binary, blends into a score, then
+  re-buckets into five levels, losing information twice.
+
+Both are worth doing; neither should be bundled with an encoder change, since separating them
+keeps it clear which change moved the numbers.
+
 ## Ruled out
 
 Researched July 2026; revisit only if the underlying facts change.

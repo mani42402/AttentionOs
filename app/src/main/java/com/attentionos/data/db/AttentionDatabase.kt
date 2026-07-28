@@ -12,7 +12,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         TrainingExampleEntity::class,
         PersonalizedModelEntity::class,
     ],
-    version = 7,
+    version = 8,
     exportSchema = true,
 )
 abstract class AttentionDatabase : RoomDatabase() {
@@ -132,6 +132,24 @@ abstract class AttentionDatabase : RoomDatabase() {
          * interactions, and training examples only feed the JSONL export. The personalized
          * model's learned weights are NOT touched.
          */
+        /**
+         * Adds class centroids to the personalized model.
+         *
+         * A nearest-class-mean is usable from a handful of corrections, where the logistic
+         * classifier is still noise, so this is what lets personalization mean anything for
+         * users who never reach the 50-correction bar.
+         */
+        val MIGRATION_7_8 = object : Migration(7, 8) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL(
+                    "ALTER TABLE personalized_model ADD COLUMN importantCentroid BLOB",
+                )
+                database.execSQL(
+                    "ALTER TABLE personalized_model ADD COLUMN notImportantCentroid BLOB",
+                )
+            }
+        }
+
         val MIGRATION_6_7 = object : Migration(6, 7) {
             override fun migrate(database: SupportSQLiteDatabase) {
                 database.execSQL("DELETE FROM user_memory")

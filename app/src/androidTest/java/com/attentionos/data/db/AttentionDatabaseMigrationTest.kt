@@ -33,7 +33,7 @@ class AttentionDatabaseMigrationTest {
     @Test
     fun migratesThroughEveryVersion() {
         helper.createDatabase(TEST_DB, 1).close()
-        helper.runMigrationsAndValidate(TEST_DB, 7, true, *ALL_MIGRATIONS).close()
+        helper.runMigrationsAndValidate(TEST_DB, 8, true, *ALL_MIGRATIONS).close()
     }
 
     @Test
@@ -51,7 +51,7 @@ class AttentionDatabaseMigrationTest {
             close()
         }
 
-        val migrated = helper.runMigrationsAndValidate(TEST_DB, 7, true, *ALL_MIGRATIONS)
+        val migrated = helper.runMigrationsAndValidate(TEST_DB, 8, true, *ALL_MIGRATIONS)
         migrated.query("SELECT notificationKey, priority FROM notification_events").use { cursor ->
             assertTrue("row should survive the migration", cursor.moveToFirst())
             assertEquals("key-1", cursor.getString(0))
@@ -109,6 +109,7 @@ class AttentionDatabaseMigrationTest {
             7,
             true,
             AttentionDatabase.MIGRATION_6_7,
+            AttentionDatabase.MIGRATION_7_8,
         )
         migrated.query("SELECT COUNT(*) FROM user_memory").use { cursor ->
             cursor.moveToFirst()
@@ -163,6 +164,7 @@ class AttentionDatabaseMigrationTest {
             AttentionDatabase.MIGRATION_4_5,
             AttentionDatabase.MIGRATION_5_6,
             AttentionDatabase.MIGRATION_6_7,
+            AttentionDatabase.MIGRATION_7_8,
         )
 
         val EXPECTED_V6_INDEXES = listOf(

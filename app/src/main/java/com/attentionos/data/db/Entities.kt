@@ -86,4 +86,7 @@ data class PersonalizedModelEntity(
     val importantCorrectCount: Int = 0,
     val notImportantEvaluationCount: Int = 0,
     val falseImportantCount: Int = 0,
+    /** Class means over embeddings, used before the classifier has enough data. */
+    val importantCentroid: ByteArray? = null,
+    val notImportantCentroid: ByteArray? = null,
 )

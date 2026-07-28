@@ -69,6 +69,7 @@ class AppContainer(
                 AttentionDatabase.MIGRATION_4_5,
                 AttentionDatabase.MIGRATION_5_6,
                 AttentionDatabase.MIGRATION_6_7,
+                AttentionDatabase.MIGRATION_7_8,
             )
             // No destructive fallback. Dropping every table would erase the user's history,
             // learned sender memory and personalized model without warning; a migration defect
