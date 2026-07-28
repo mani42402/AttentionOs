@@ -6,6 +6,7 @@ import ai.onnxruntime.OrtSession
 import ai.onnxruntime.TensorInfo
 import android.content.Context
 import android.os.SystemClock
+import android.util.LruCache
 import android.util.Log
 import com.attentionos.BuildConfig
 import com.attentionos.domain.KeywordLanguageAnalyzer
@@ -30,6 +31,12 @@ class MiniLmLanguageAnalyzer(
 ) : LanguageAnalyzer {
     private val inferenceLock = Any()
 
+    /**
+     * Recently embedded notification text. Bounded: each entry holds a 384-float embedding
+     * (~1.5KB), so the cache costs roughly 100KB at capacity.
+     */
+    private val embeddingCache = LruCache<String, SemanticResult>(EMBEDDING_CACHE_ENTRIES)
+
     @Volatile
     private var runtime: RuntimeState? = null
 
@@ -45,7 +52,14 @@ class MiniLmLanguageAnalyzer(
         val content = listOfNotNull(title, text).joinToString(" ").trim()
         if (content.isEmpty()) return fallbackResult
 
-        val modelResult = runCatching {
+        // Apps update the same notification repeatedly (progress, message counts, "typing…"),
+        // and each update previously paid for a full transformer pass over identical text.
+        // The embedding is a pure function of the content, so it is safe to reuse.
+        embeddingCache[content]?.let { cached ->
+            return analysisFrom(cached, fallbackResult)
+        }
+
+        val semantic = runCatching {
             val active = state() ?: return@runCatching null
             synchronized(inferenceLock) {
                 val startedAt = SystemClock.elapsedRealtime()
@@ -66,23 +80,49 @@ class MiniLmLanguageAnalyzer(
                     0.45f + (urgentSimilarity - routineSimilarity) * 1.35f
                     ).coerceIn(0f, 1f)
 
-                LanguageAnalysis(
-                    urgency = maxOf(fallbackResult.urgency, semanticUrgency),
-                    category = categoryMatch?.takeIf { categoryScore >= CATEGORY_THRESHOLD }
-                        ?: fallbackResult.category,
-                    semanticEmbedding = embedding,
-                    modelVersion = MODEL_VERSION,
+                SemanticResult(
+                    embedding = embedding,
+                    category = categoryMatch?.takeIf { categoryScore >= CATEGORY_THRESHOLD },
+                    urgency = semanticUrgency,
                 ).also {
                     if (BuildConfig.DEBUG) {
-                        Log.d(LOG_TAG, "MiniLM inference completed in " +
-                            "${SystemClock.elapsedRealtime() - startedAt}ms")
+                        Log.d(
+                            LOG_TAG,
+                            "MiniLM inference completed in " +
+                                "${SystemClock.elapsedRealtime() - startedAt}ms",
+                        )
                     }
                 }
             }
-        }.getOrNull()
+        }.getOrNull() ?: return fallbackResult
 
-        return modelResult ?: fallbackResult
+        embeddingCache.put(content, semantic)
+        return analysisFrom(semantic, fallbackResult)
     }
+
+    /**
+     * Combines cached model output with this call's keyword result.
+     *
+     * Only the model half is cached: the keyword analyzer also considers the package name, so
+     * the same text from a different app can legitimately produce a different fallback.
+     * Semantic urgency can only raise the keyword urgency, never lower it.
+     */
+    private fun analysisFrom(
+        semantic: SemanticResult,
+        fallbackResult: LanguageAnalysis,
+    ): LanguageAnalysis = LanguageAnalysis(
+        urgency = maxOf(fallbackResult.urgency, semantic.urgency),
+        category = semantic.category ?: fallbackResult.category,
+        semanticEmbedding = semantic.embedding,
+        modelVersion = MODEL_VERSION,
+    )
+
+    /** Model-derived facts about a piece of text, independent of which app sent it. */
+    private class SemanticResult(
+        val embedding: FloatArray,
+        val category: NotificationCategory?,
+        val urgency: Float,
+    )
 
     private fun state(): RuntimeState? {
         runtime?.let { return it }
@@ -261,6 +301,7 @@ class MiniLmLanguageAnalyzer(
         const val CATEGORY_THRESHOLD = 0.22f
         const val LOG_TAG = "AttentionAI"
         const val COPY_BUFFER_BYTES = 64 * 1024
+        const val EMBEDDING_CACHE_ENTRIES = 64
 
         /** bert-base-uncased vocabulary; a mismatch means the wrong asset shipped. */
         const val EXPECTED_VOCABULARY_SIZE = 30_522
