@@ -4,11 +4,16 @@ import java.util.Locale
 import kotlin.math.roundToInt
 
 /**
- * Fast, deterministic first-stage classifier.
+ * Deterministic scoring stage that turns a notification into an [AttentionDecision].
  *
- * It is intentionally allocation-light and does no I/O. A future TFLite/MediaPipe model can
- * implement [LanguageAnalyzer] and be run only for ambiguous scores while this remains the
- * always-available fallback.
+ * The engine itself is allocation-light, but the injected [LanguageAnalyzer] is not: in
+ * production it is the ONNX-backed analyzer, which performs file I/O on first use and a
+ * transformer forward pass per call. Callers must therefore treat [decide] as blocking work and
+ * keep it off the main thread. [KeywordLanguageAnalyzer] is the always-available fallback used
+ * when the model is unavailable, and in tests.
+ *
+ * Score bands and protected categories come from [AttentionPolicy] so that scoring here and
+ * personalized re-scoring elsewhere can never diverge.
  */
 class PriorityEngine(
     private val languageAnalyzer: LanguageAnalyzer = KeywordLanguageAnalyzer(),
@@ -30,21 +35,22 @@ class PriorityEngine(
         if (analysis.category == NotificationCategory.PROMOTION) score -= 0.32f
         if (signal.isOngoing) score -= 0.18f
 
-        val quietHours = context.hourOfDay < 7 || context.hourOfDay >= 23
-        val isCall = signal.categoryHint == "call"
-        val isAlarm = signal.categoryHint == "alarm"
-        val hasStrongUrgency = analysis.urgency >= 0.75f || isCall || isAlarm
+        val quietHours = context.hourOfDay < QUIET_HOURS_END || context.hourOfDay >= QUIET_HOURS_START
+        val isCall = signal.categoryHint == AttentionPolicy.CATEGORY_HINT_CALL
+        val isAlarm = signal.categoryHint == AttentionPolicy.CATEGORY_HINT_ALARM
+        val hasStrongUrgency =
+            analysis.urgency >= AttentionPolicy.STRONG_URGENCY_THRESHOLD || isCall || isAlarm
         if (
             quietHours &&
             !hasStrongUrgency &&
-            analysis.category !in neverSuppressCategories
+            analysis.category !in AttentionPolicy.neverSuppressCategories
         ) {
             score -= 0.10f
         }
         if (
             context.focusModeEnabled &&
             !hasStrongUrgency &&
-            analysis.category !in neverSuppressCategories
+            analysis.category !in AttentionPolicy.neverSuppressCategories
         ) {
             score -= 0.17f
         }
@@ -57,15 +63,8 @@ class PriorityEngine(
             analysis.category == NotificationCategory.FINANCE -> maxOf(score, 0.70f)
             else -> score
         }.coerceIn(0f, 1f)
-        val priority = when {
-            score >= 0.86f -> AttentionPriority.CRITICAL
-            score >= 0.68f -> AttentionPriority.HIGH
-            score >= 0.46f -> AttentionPriority.MEDIUM
-            score >= 0.24f -> AttentionPriority.LOW
-            else -> AttentionPriority.SILENT
-        }
-        val shouldQueue = context.focusModeEnabled &&
-            priority in setOf(AttentionPriority.LOW, AttentionPriority.SILENT)
+        val priority = AttentionPolicy.priorityFor(score)
+        val shouldQueue = AttentionPolicy.shouldQueue(context.focusModeEnabled, priority)
 
         return AttentionDecision(
             priority = priority,
@@ -100,10 +99,9 @@ class PriorityEngine(
     }
 
     private companion object {
-        val neverSuppressCategories = setOf(
-            NotificationCategory.SECURITY,
-            NotificationCategory.FINANCE,
-        )
+        /** Quiet hours run from [QUIET_HOURS_START] until [QUIET_HOURS_END] local time. */
+        const val QUIET_HOURS_START = 23
+        const val QUIET_HOURS_END = 7
     }
 }
 

@@ -111,6 +111,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import com.attentionos.core.common.TimeConstants
 import com.attentionos.data.local.NotificationEventEntity
 import com.attentionos.presentation.MainUiState
 import com.attentionos.presentation.MainViewModel
@@ -2821,11 +2822,11 @@ private fun ReminderScheduleEditor(
         Spacer(Modifier.height(8.dp))
         OutlinedButton(
             onClick = { showPicker = true },
-            enabled = times.size < MAX_DAILY_REMINDERS,
+            enabled = times.size < TimeConstants.MAX_DAILY_REMINDERS,
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(16.dp),
         ) {
-            Text(if (times.size < MAX_DAILY_REMINDERS) "Add another time" else "Six reminders maximum")
+            Text(if (times.size < TimeConstants.MAX_DAILY_REMINDERS) "Add another time" else "Six reminders maximum")
         }
     }
 
@@ -2863,7 +2864,6 @@ private fun formatReminderTime(minuteOfDay: Int): String {
     return "$display:${minute.toString().padStart(2, '0')} ${if (hour < 12) "AM" else "PM"}"
 }
 
-private const val MAX_DAILY_REMINDERS = 6
 
 @Composable
 private fun InterruptionPriorityRow(

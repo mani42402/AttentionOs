@@ -2,6 +2,7 @@ package com.attentionos.data
 
 import android.util.Log
 import com.attentionos.BuildConfig
+import com.attentionos.core.common.TimeConstants
 import com.attentionos.data.local.AttentionDao
 import com.attentionos.data.local.NotificationEventEntity
 import com.attentionos.data.local.PersonalizedModelEntity
@@ -9,6 +10,7 @@ import com.attentionos.data.local.TrainingExampleEntity
 import com.attentionos.data.local.UserMemoryEntity
 import com.attentionos.domain.AttentionContext
 import com.attentionos.domain.AttentionDecision
+import com.attentionos.domain.AttentionPolicy
 import com.attentionos.domain.AttentionPriority
 import com.attentionos.domain.NotificationCategory
 import com.attentionos.domain.NotificationSignal
@@ -286,7 +288,7 @@ class AttentionRepository(
     }
 
     suspend fun prune(retentionDays: Int) {
-        val before = System.currentTimeMillis() - retentionDays * DAY_MILLIS
+        val before = System.currentTimeMillis() - retentionDays * TimeConstants.DAY_MILLIS
         dao.deleteEventsBefore(before)
         dao.deleteExportedTrainingBefore(before)
     }
@@ -454,17 +456,16 @@ class AttentionRepository(
     private fun isSafetyProtected(
         decision: AttentionDecision,
         signal: NotificationSignal,
-    ): Boolean = decision.category in setOf(
-        NotificationCategory.SECURITY,
-        NotificationCategory.FINANCE,
-    ) ||
-        decision.semanticUrgency >= 0.75f ||
-        signal.categoryHint == "call" ||
-        signal.categoryHint == "alarm"
+    ): Boolean = AttentionPolicy.isSafetyProtected(
+        category = decision.category,
+        semanticUrgency = decision.semanticUrgency,
+        categoryHint = signal.categoryHint,
+    )
 
     private fun pilotPeriodComplete(settings: AppSettings): Boolean =
         settings.pilotStartedAt > 0L &&
-            System.currentTimeMillis() - settings.pilotStartedAt >= PILOT_DURATION_MILLIS
+            System.currentTimeMillis() - settings.pilotStartedAt >=
+            TimeConstants.PILOT_DURATION_MILLIS
 
     private fun String.jsonEscape(): String = buildString(length + 8) {
         this@jsonEscape.forEach { character ->
@@ -480,9 +481,7 @@ class AttentionRepository(
     }
 
     private companion object {
-        const val DAY_MILLIS = 86_400_000L
         const val HIGH_PRIORITY_THRESHOLD = 0.68f
-        const val PILOT_DURATION_MILLIS = 7L * DAY_MILLIS
 
         val testScenarios = listOf(
             TestScenario(

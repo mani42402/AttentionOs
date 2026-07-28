@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.attentionos.AppContainer
+import com.attentionos.core.common.TimeConstants
 import com.attentionos.data.AppSettings
 import com.attentionos.data.AttentionTestResult
 import com.attentionos.data.UserAction
@@ -46,17 +47,14 @@ data class MainUiState(
         } else {
             (
                 (System.currentTimeMillis() - settings.pilotStartedAt)
-                    .coerceAtLeast(0L) / DAY_MILLIS
+                    .coerceAtLeast(0L) / TimeConstants.DAY_MILLIS
                 ).toInt() + 1
         }
     val pilotComplete: Boolean
         get() = settings.pilotStartedAt > 0L &&
-            System.currentTimeMillis() - settings.pilotStartedAt >= 7L * DAY_MILLIS
+            System.currentTimeMillis() - settings.pilotStartedAt >=
+            TimeConstants.PILOT_DURATION_MILLIS
     val personalModelActive: Boolean get() = personalizedModel.isActive && pilotComplete
-
-    private companion object {
-        const val DAY_MILLIS = 86_400_000L
-    }
 }
 
 data class TestLabUiState(

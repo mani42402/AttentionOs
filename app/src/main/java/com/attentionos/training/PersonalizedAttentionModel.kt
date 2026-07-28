@@ -2,7 +2,7 @@ package com.attentionos.training
 
 import com.attentionos.domain.AttentionContext
 import com.attentionos.domain.AttentionDecision
-import com.attentionos.domain.AttentionPriority
+import com.attentionos.domain.AttentionPolicy
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import kotlin.math.PI
@@ -236,22 +236,13 @@ object PersonalizedDecisionPolicy {
         if (safetyProtected && adjustedScore < base.score) return base
         if (abs(adjustedScore - base.score) < MINIMUM_MEANINGFUL_CHANGE) return base
 
-        val adjustedPriority = priorityFor(adjustedScore)
+        val adjustedPriority = AttentionPolicy.priorityFor(adjustedScore)
         return base.copy(
             score = adjustedScore,
             priority = adjustedPriority,
-            shouldQueue = context.focusModeEnabled &&
-                adjustedPriority in setOf(AttentionPriority.LOW, AttentionPriority.SILENT),
+            shouldQueue = AttentionPolicy.shouldQueue(context.focusModeEnabled, adjustedPriority),
             explanation = "Your private on-device model adjusted this from your corrections.",
         )
-    }
-
-    private fun priorityFor(score: Float): AttentionPriority = when {
-        score >= 0.86f -> AttentionPriority.CRITICAL
-        score >= 0.68f -> AttentionPriority.HIGH
-        score >= 0.46f -> AttentionPriority.MEDIUM
-        score >= 0.24f -> AttentionPriority.LOW
-        else -> AttentionPriority.SILENT
     }
 
     private const val BASE_WEIGHT = 0.80f
