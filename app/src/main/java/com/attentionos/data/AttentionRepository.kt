@@ -1,0 +1,561 @@
+package com.attentionos.data
+
+import android.util.Log
+import com.attentionos.BuildConfig
+import com.attentionos.data.local.AttentionDao
+import com.attentionos.data.local.NotificationEventEntity
+import com.attentionos.data.local.PersonalizedModelEntity
+import com.attentionos.data.local.TrainingExampleEntity
+import com.attentionos.data.local.UserMemoryEntity
+import com.attentionos.domain.AttentionContext
+import com.attentionos.domain.AttentionDecision
+import com.attentionos.domain.AttentionPriority
+import com.attentionos.domain.NotificationCategory
+import com.attentionos.domain.NotificationSignal
+import com.attentionos.domain.PriorityEngine
+import com.attentionos.domain.UserMemory
+import com.attentionos.training.EmbeddingCodec
+import com.attentionos.training.ModelWeightsCodec
+import com.attentionos.training.PersonalizedAttentionModel
+import com.attentionos.training.PersonalizedDecisionPolicy
+import com.attentionos.training.PersonalizedModelProgress
+import com.attentionos.training.PersonalizedModelState
+import java.time.Instant
+import java.time.ZoneId
+import kotlin.math.roundToLong
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+
+class AttentionRepository(
+    private val dao: AttentionDao,
+    private val priorityEngine: PriorityEngine,
+) {
+    private val modelMutex = Mutex()
+    private var modelLoaded = false
+    private var cachedModel: PersonalizedModelState? = null
+
+    fun recentEvents(): Flow<List<NotificationEventEntity>> = dao.observeRecent()
+    fun importantEvents(): Flow<List<NotificationEventEntity>> = dao.observeImportant()
+    fun queuedEvents(): Flow<List<NotificationEventEntity>> = dao.observeQueued()
+    fun receivedSince(since: Long): Flow<Int> = dao.observeReceivedSince(since)
+    fun importantSince(since: Long): Flow<Int> = dao.observeImportantSince(since)
+    fun queuedSince(since: Long): Flow<Int> = dao.observeQueuedSince(since)
+    fun trainingCount(): Flow<Int> = dao.observeTrainingCount()
+    fun averageAnalysisMillis(): Flow<Double?> = dao.observeAverageAnalysisMillis()
+    fun personalizedModelProgress(): Flow<PersonalizedModelProgress> =
+        dao.observePersonalizedModel().map { model ->
+            PersonalizedModelProgress(
+                positiveCount = model?.positiveCount ?: 0,
+                negativeCount = model?.negativeCount ?: 0,
+                evaluationCount = model?.evaluationCount ?: 0,
+                personalCorrectCount = model?.personalCorrectCount ?: 0,
+                baselineCorrectCount = model?.baselineCorrectCount ?: 0,
+                importantEvaluationCount = model?.importantEvaluationCount ?: 0,
+                importantCorrectCount = model?.importantCorrectCount ?: 0,
+                notImportantEvaluationCount = model?.notImportantEvaluationCount ?: 0,
+                falseImportantCount = model?.falseImportantCount ?: 0,
+            )
+        }
+
+    suspend fun runTestLab(settings: AppSettings): List<AttentionTestResult> {
+        val now = System.currentTimeMillis()
+        val hour = Instant.ofEpochMilli(now).atZone(ZoneId.systemDefault()).hour
+        val context = AttentionContext(settings.focusMode, hour)
+        return testScenarios.mapIndexed { index, scenario ->
+            val signal = NotificationSignal(
+                packageName = scenario.packageName,
+                title = scenario.title,
+                text = scenario.text,
+                postedAt = now + index,
+                isConversation = scenario.isConversation,
+                isOngoing = false,
+                categoryHint = scenario.categoryHint,
+            )
+            val startedAt = System.nanoTime()
+            val base = priorityEngine.decide(signal, context, memory = null)
+            val personalization = if (settings.learningEnabled) {
+                personalize(
+                    base,
+                    signal,
+                    context,
+                    memory = null,
+                    allowActivation = pilotPeriodComplete(settings),
+                )
+            } else {
+                PersonalizationOutcome(base, null, false)
+            }
+            AttentionTestResult(
+                name = scenario.name,
+                category = personalization.decision.category,
+                basePriority = base.priority,
+                finalPriority = personalization.decision.priority,
+                baseScore = base.score,
+                personalProbability = personalization.probabilityImportant,
+                personalModelApplied = personalization.applied,
+                safetyProtected = isSafetyProtected(base, signal),
+                durationMillis = ((System.nanoTime() - startedAt) / 1_000_000L)
+                    .coerceAtLeast(0L),
+            )
+        }
+    }
+
+    suspend fun processPosted(
+        key: String,
+        appLabel: String,
+        signal: NotificationSignal,
+        settings: AppSettings,
+    ): AttentionDecision {
+        val senderIdentity = "${signal.packageName}:${signal.title.orEmpty()}"
+        val senderHash = stableHash(senderIdentity)
+        val memoryEntity = dao.memory(senderHash)
+        val memory = memoryEntity?.toDomain()
+        val hour = Instant.ofEpochMilli(signal.postedAt)
+            .atZone(ZoneId.systemDefault())
+            .hour
+        val context = AttentionContext(settings.focusMode, hour)
+        val analysisStartedAt = System.nanoTime()
+        val baseDecision = priorityEngine.decide(
+            signal = signal,
+            context = context,
+            memory = memory,
+        )
+        val analysisDurationMillis = (
+            (System.nanoTime() - analysisStartedAt) / 1_000_000L
+            ).coerceAtLeast(0L)
+        val personalization = if (settings.learningEnabled) {
+            personalize(
+                baseDecision,
+                signal,
+                context,
+                memory,
+                allowActivation = pilotPeriodComplete(settings),
+            )
+        } else {
+            PersonalizationOutcome(baseDecision, null, false)
+        }
+        val decision = personalization.decision
+
+        dao.insertEvent(
+            NotificationEventEntity(
+                notificationKey = key,
+                packageName = signal.packageName,
+                appLabel = appLabel,
+                senderHash = senderHash,
+                title = signal.title.takeIf { settings.storeContent },
+                message = signal.text.takeIf { settings.storeContent },
+                postedAt = signal.postedAt,
+                priority = decision.priority.name,
+                category = decision.category.name,
+                score = decision.score,
+                explanation = decision.explanation,
+                queued = decision.shouldQueue,
+                embeddingQ8 = EmbeddingCodec.encode(decision.semanticEmbedding),
+                languageModelVersion = decision.languageModelVersion,
+                contextHour = hour,
+                focusModeAtDecision = settings.focusMode,
+                senderImportanceAtDecision = memory?.importanceScore ?: 0.5f,
+                senderOpenRateAtDecision = memory?.openRate ?: 0.5f,
+                baseScoreAtDecision = baseDecision.score,
+                semanticUrgency = baseDecision.semanticUrgency,
+                personalProbability = personalization.probabilityImportant,
+                personalModelApplied = personalization.applied,
+                analysisDurationMillis = analysisDurationMillis,
+            ),
+        )
+        return decision
+    }
+
+    suspend fun recordAction(
+        notificationKey: String,
+        action: UserAction,
+        settings: AppSettings,
+        actedAt: Long = System.currentTimeMillis(),
+    ) {
+        val event = dao.eventByKey(notificationKey) ?: return
+        val isExplicit = action == UserAction.IMPORTANT || action == UserAction.NOT_IMPORTANT
+        val previousAction = event.action?.let { runCatching { UserAction.valueOf(it) }.getOrNull() }
+        val previousWasExplicit =
+            previousAction == UserAction.IMPORTANT || previousAction == UserAction.NOT_IMPORTANT
+        if (previousWasExplicit || (previousAction != null && !isExplicit)) return
+        val replacingPassiveAction = previousAction != null
+
+        dao.markAction(notificationKey, action.name, actedAt)
+        if (!settings.learningEnabled) return
+
+        val previous = dao.memory(event.senderHash)
+        val oldInteractions = previous?.interactionCount ?: 0
+        val newInteractions = if (replacingPassiveAction) {
+            oldInteractions.coerceAtLeast(1)
+        } else {
+            oldInteractions + 1
+        }
+        val opened = action == UserAction.OPENED || action == UserAction.IMPORTANT
+        val previousOpenCount = (previous?.openCount ?: 0) -
+            if (previousAction == UserAction.OPENED) 1 else 0
+        val previousDismissCount = (previous?.dismissCount ?: 0) -
+            if (previousAction == UserAction.DISMISSED) 1 else 0
+        val openCount = previousOpenCount.coerceAtLeast(0) + if (opened) 1 else 0
+        val dismissCount = previousDismissCount.coerceAtLeast(0) + if (opened) 0 else 1
+        val responseSeconds = ((actedAt - event.postedAt).coerceAtLeast(0L) / 1_000L)
+        val oldAverage = previous?.averageResponseSeconds ?: responseSeconds
+        val newAverage = if (replacingPassiveAction) {
+            oldAverage
+        } else if (opened) {
+            ((oldAverage * oldInteractions) + responseSeconds) /
+                newInteractions.coerceAtLeast(1)
+        } else {
+            oldAverage
+        }
+        val observedImportance = if (action == UserAction.IMPORTANT) {
+            1f
+        } else if (action == UserAction.NOT_IMPORTANT) {
+            0.05f
+        } else if (opened) {
+            if (responseSeconds <= 60) 1f else 0.75f
+        } else {
+            0.15f
+        }
+        val oldImportance = previous?.importanceScore ?: 0.5f
+        val observationWeight = if (isExplicit) 0.40f else 0.20f
+
+        dao.upsertMemory(
+            UserMemoryEntity(
+                senderHash = event.senderHash,
+                importanceScore = (
+                    oldImportance * (1f - observationWeight) +
+                        observedImportance * observationWeight
+                    )
+                    .coerceIn(0.05f, 0.98f),
+                averageResponseSeconds = newAverage,
+                openCount = openCount,
+                dismissCount = dismissCount,
+                interactionCount = newInteractions,
+                updatedAt = actedAt,
+            ),
+        )
+
+        val expected = when {
+            action == UserAction.IMPORTANT -> "HIGH"
+            action == UserAction.NOT_IMPORTANT -> "LOW"
+            opened && responseSeconds <= 60 -> "HIGH"
+            opened -> "MEDIUM"
+            else -> "LOW"
+        }
+        val example = TrainingExampleEntity(
+            sourceEventId = event.id,
+            featuresJson = buildFeaturesJson(event, responseSeconds, opened),
+            expectedPriority = expected,
+            createdAt = actedAt,
+            embeddingQ8 = event.embeddingQ8,
+            languageModelVersion = event.languageModelVersion,
+        )
+        if (isExplicit) dao.deleteTrainingForSource(event.id)
+        dao.insertTrainingExample(example)
+        if (isExplicit) {
+            updatePersonalizedModel(
+                event = event,
+                important = action == UserAction.IMPORTANT,
+                updatedAt = actedAt,
+            )
+        }
+        if (BuildConfig.DEBUG) {
+            Log.d(
+                "AttentionTraining",
+                "Labeled example stored: embeddingBytes=${example.embeddingQ8?.size ?: 0}, " +
+                    "model=${example.languageModelVersion ?: "fallback"}, label=$expected",
+            )
+        }
+    }
+
+    suspend fun resetPersonalizedModel() {
+        modelMutex.withLock {
+            dao.deletePersonalizedModel()
+            cachedModel = null
+            modelLoaded = true
+        }
+    }
+
+    suspend fun deleteAllUserData() {
+        modelMutex.withLock {
+            dao.deleteAllUserData()
+            cachedModel = null
+            modelLoaded = true
+        }
+    }
+
+    suspend fun prune(retentionDays: Int) {
+        val before = System.currentTimeMillis() - retentionDays * DAY_MILLIS
+        dao.deleteEventsBefore(before)
+        dao.deleteExportedTrainingBefore(before)
+    }
+
+    suspend fun exportableTraining(): List<TrainingExampleEntity> = dao.trainingForExport()
+
+    suspend fun markExported(ids: List<Long>) {
+        if (ids.isNotEmpty()) dao.markTrainingExported(ids)
+    }
+
+    private fun buildFeaturesJson(
+        event: NotificationEventEntity,
+        responseSeconds: Long,
+        opened: Boolean,
+    ): String = buildString(256) {
+        append('{')
+        append("\"app\":\"").append(event.packageName.jsonEscape()).append("\",")
+        append("\"sender_hash\":\"").append(event.senderHash).append("\",")
+        append("\"category\":\"").append(event.category).append("\",")
+        append("\"prediction\":\"").append(event.priority).append("\",")
+        append("\"score\":").append(((event.score * 10_000).roundToLong() / 10_000.0))
+        append(',')
+        append("\"base_score\":")
+            .append(((event.baseScoreAtDecision * 10_000).roundToLong() / 10_000.0))
+        append(',')
+        append("\"hour\":").append(event.contextHour).append(',')
+        append("\"focus_mode\":").append(event.focusModeAtDecision).append(',')
+        append("\"sender_importance\":")
+            .append(((event.senderImportanceAtDecision * 10_000).roundToLong() / 10_000.0))
+        append(',')
+        append("\"sender_open_rate\":")
+            .append(((event.senderOpenRateAtDecision * 10_000).roundToLong() / 10_000.0))
+        append(',')
+        append("\"opened\":").append(opened).append(',')
+        append("\"response_seconds\":").append(responseSeconds)
+        append('}')
+    }
+
+    private fun UserMemoryEntity.toDomain(): UserMemory = UserMemory(
+        senderHash = senderHash,
+        importanceScore = importanceScore,
+        openRate = if (interactionCount == 0) 0.5f else openCount.toFloat() / interactionCount,
+        averageResponseSeconds = averageResponseSeconds,
+        interactionCount = interactionCount,
+    )
+
+    private suspend fun personalize(
+        base: AttentionDecision,
+        signal: NotificationSignal,
+        context: AttentionContext,
+        memory: UserMemory?,
+        allowActivation: Boolean,
+    ): PersonalizationOutcome {
+        val state = loadPersonalizedModel()
+            ?: return PersonalizationOutcome(base, null, false)
+        val features = PersonalizedAttentionModel.features(
+            embedding = base.semanticEmbedding,
+            hourOfDay = context.hourOfDay,
+            senderImportance = memory?.importanceScore ?: 0.5f,
+            senderOpenRate = memory?.openRate ?: 0.5f,
+            focusModeEnabled = context.focusModeEnabled,
+            baseScore = base.score,
+        ) ?: return PersonalizationOutcome(base, null, false)
+        val probability = PersonalizedAttentionModel.predict(state, features)
+        if (!state.isActive || !allowActivation) {
+            return PersonalizationOutcome(base, probability, false)
+        }
+        val safetyProtected = isSafetyProtected(base, signal)
+        val decision = PersonalizedDecisionPolicy.apply(
+            base = base,
+            probabilityImportant = probability,
+            context = context,
+            safetyProtected = safetyProtected,
+        )
+        return PersonalizationOutcome(
+            decision = decision,
+            probabilityImportant = probability,
+            applied = decision != base,
+        )
+    }
+
+    private suspend fun loadPersonalizedModel(): PersonalizedModelState? =
+        modelMutex.withLock {
+            if (!modelLoaded) {
+                cachedModel = dao.personalizedModel()?.toState()
+                modelLoaded = true
+            }
+            cachedModel
+        }
+
+    private suspend fun updatePersonalizedModel(
+        event: NotificationEventEntity,
+        important: Boolean,
+        updatedAt: Long,
+    ) {
+        val features = PersonalizedAttentionModel.features(
+            embedding = EmbeddingCodec.decode(event.embeddingQ8),
+            hourOfDay = event.contextHour,
+            senderImportance = event.senderImportanceAtDecision,
+            senderOpenRate = event.senderOpenRateAtDecision,
+            focusModeEnabled = event.focusModeAtDecision,
+            baseScore = event.baseScoreAtDecision,
+        ) ?: return
+
+        modelMutex.withLock {
+            if (!modelLoaded) {
+                cachedModel = dao.personalizedModel()?.toState()
+                modelLoaded = true
+            }
+            val updated = PersonalizedAttentionModel.update(
+                current = cachedModel,
+                features = features,
+                important = important,
+                predictionBeforeUpdate = event.personalProbability,
+                baselineWasImportant = event.baseScoreAtDecision >= HIGH_PRIORITY_THRESHOLD,
+            )
+            dao.upsertPersonalizedModel(updated.toEntity(updatedAt))
+            cachedModel = updated
+            if (BuildConfig.DEBUG) {
+                Log.d(
+                    "AttentionTraining",
+                    "Personal model updated: examples=${updated.exampleCount}, " +
+                        "positive=${updated.positiveCount}, negative=${updated.negativeCount}, " +
+                        "active=${updated.isActive}",
+                )
+            }
+        }
+    }
+
+    private fun PersonalizedModelEntity.toState(): PersonalizedModelState? {
+        if (version != PersonalizedAttentionModel.MODEL_VERSION) return null
+        val decodedWeights = ModelWeightsCodec.decode(weights) ?: return null
+        return PersonalizedModelState(
+            weights = decodedWeights,
+            bias = bias,
+            positiveCount = positiveCount,
+            negativeCount = negativeCount,
+            evaluationCount = evaluationCount,
+            personalCorrectCount = personalCorrectCount,
+            baselineCorrectCount = baselineCorrectCount,
+            importantEvaluationCount = importantEvaluationCount,
+            importantCorrectCount = importantCorrectCount,
+            notImportantEvaluationCount = notImportantEvaluationCount,
+            falseImportantCount = falseImportantCount,
+        )
+    }
+
+    private fun PersonalizedModelState.toEntity(updatedAt: Long): PersonalizedModelEntity =
+        PersonalizedModelEntity(
+            weights = ModelWeightsCodec.encode(weights),
+            bias = bias,
+            positiveCount = positiveCount,
+            negativeCount = negativeCount,
+            updatedAt = updatedAt,
+            version = PersonalizedAttentionModel.MODEL_VERSION,
+            evaluationCount = evaluationCount,
+            personalCorrectCount = personalCorrectCount,
+            baselineCorrectCount = baselineCorrectCount,
+            importantEvaluationCount = importantEvaluationCount,
+            importantCorrectCount = importantCorrectCount,
+            notImportantEvaluationCount = notImportantEvaluationCount,
+            falseImportantCount = falseImportantCount,
+        )
+
+    private fun isSafetyProtected(
+        decision: AttentionDecision,
+        signal: NotificationSignal,
+    ): Boolean = decision.category in setOf(
+        NotificationCategory.SECURITY,
+        NotificationCategory.FINANCE,
+    ) ||
+        decision.semanticUrgency >= 0.75f ||
+        signal.categoryHint == "call" ||
+        signal.categoryHint == "alarm"
+
+    private fun pilotPeriodComplete(settings: AppSettings): Boolean =
+        settings.pilotStartedAt > 0L &&
+            System.currentTimeMillis() - settings.pilotStartedAt >= PILOT_DURATION_MILLIS
+
+    private fun String.jsonEscape(): String = buildString(length + 8) {
+        this@jsonEscape.forEach { character ->
+            when (character) {
+                '\\' -> append("\\\\")
+                '"' -> append("\\\"")
+                '\n' -> append("\\n")
+                '\r' -> append("\\r")
+                '\t' -> append("\\t")
+                else -> append(character)
+            }
+        }
+    }
+
+    private companion object {
+        const val DAY_MILLIS = 86_400_000L
+        const val HIGH_PRIORITY_THRESHOLD = 0.68f
+        const val PILOT_DURATION_MILLIS = 7L * DAY_MILLIS
+
+        val testScenarios = listOf(
+            TestScenario(
+                name = "Security",
+                packageName = "com.example.identity",
+                title = "New login detected",
+                text = "Verification code 482911. If this wasn't you, secure your account now.",
+                categoryHint = "status",
+            ),
+            TestScenario(
+                name = "Urgent work",
+                packageName = "com.slack",
+                title = "Production incident",
+                text = "Production server is down. Action required immediately.",
+                categoryHint = "msg",
+                isConversation = true,
+            ),
+            TestScenario(
+                name = "Conversation",
+                packageName = "com.whatsapp",
+                title = "Sam",
+                text = "Are we still meeting for lunch at 1?",
+                categoryHint = "msg",
+                isConversation = true,
+            ),
+            TestScenario(
+                name = "Delivery",
+                packageName = "com.example.courier",
+                title = "Package update",
+                text = "Your delivery is arriving this afternoon.",
+                categoryHint = "status",
+            ),
+            TestScenario(
+                name = "Promotion",
+                packageName = "com.example.shop",
+                title = "Weekend sale",
+                text = "Save up to 40 percent with this limited offer.",
+                categoryHint = "promo",
+            ),
+        )
+    }
+}
+
+private data class PersonalizationOutcome(
+    val decision: AttentionDecision,
+    val probabilityImportant: Float?,
+    val applied: Boolean,
+)
+
+private data class TestScenario(
+    val name: String,
+    val packageName: String,
+    val title: String,
+    val text: String,
+    val categoryHint: String,
+    val isConversation: Boolean = false,
+)
+
+data class AttentionTestResult(
+    val name: String,
+    val category: NotificationCategory,
+    val basePriority: AttentionPriority,
+    val finalPriority: AttentionPriority,
+    val baseScore: Float,
+    val personalProbability: Float?,
+    val personalModelApplied: Boolean,
+    val safetyProtected: Boolean,
+    val durationMillis: Long,
+)
+
+enum class UserAction {
+    OPENED,
+    DISMISSED,
+    IMPORTANT,
+    NOT_IMPORTANT,
+}

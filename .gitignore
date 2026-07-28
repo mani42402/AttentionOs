@@ -1,0 +1,21 @@
+*.iml
+.gradle/
+.idea/
+.kotlin/
+local.properties
+build/
+captures/
+.DS_Store
+app/build/
+
+# Secrets — never commit. Templates live alongside as *.example
+keystore.properties
+secrets.properties
+*.jks
+*.keystore
+
+# Build/tooling noise
+.cxx/
+*.hprof
+lint-results*.html
+lint-results*.xml
