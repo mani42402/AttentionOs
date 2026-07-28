@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.Intent
 import android.os.Build
 import android.os.Bundle
+import android.view.WindowManager
 import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -70,6 +71,21 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+
+            // The UI renders stored notification titles and bodies. Without FLAG_SECURE those
+            // appear in the recents thumbnail, in screenshots, and to screen recorders — which
+            // would contradict the app's central promise. Default on, user-overridable.
+            LaunchedEffect(uiState.settings.screenSecurity) {
+                if (uiState.settings.screenSecurity) {
+                    window.setFlags(
+                        WindowManager.LayoutParams.FLAG_SECURE,
+                        WindowManager.LayoutParams.FLAG_SECURE,
+                    )
+                } else {
+                    window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+                }
+            }
+
             AttentionTheme(
                 darkTheme = uiState.settings.darkTheme,
                 motionEnabled = uiState.settings.motionEnabled,
@@ -80,7 +96,10 @@ class MainActivity : ComponentActivity() {
                 LaunchedEffect(Unit) {
                     viewModel.events.collect { event ->
                         when (event) {
-                            is UiEvent.ExportReady -> shareExport(event.result.uri, event.result.count)
+                            is UiEvent.ExportReady -> {
+                                shareExport(event.result.uri, event.result.count)
+                                viewModel.confirmExported(event.result.exampleIds)
+                            }
                             UiEvent.NothingToExport ->
                                 snackbar.showSnackbar("No learned examples to export yet.")
                             UiEvent.DataDeleted -> snackbar.showSnackbar("All local attention data deleted.")
@@ -129,6 +148,7 @@ class MainActivity : ComponentActivity() {
                         onReminderTimesChanged = viewModel::setReviewReminderTimes,
                         onDarkThemeChanged = viewModel::setDarkTheme,
                         onMotionChanged = viewModel::setMotionEnabled,
+                        onScreenSecurityChanged = viewModel::setScreenSecurity,
                         onRequestNotificationPermission = ::requestNotificationPermission,
                         onRetentionChanged = viewModel::setRetentionDays,
                         onReplayOnboarding = viewModel::replayOnboarding,
@@ -190,6 +210,7 @@ private fun AttentionApp(
     onReminderTimesChanged: (Set<Int>) -> Unit,
     onDarkThemeChanged: (Boolean) -> Unit,
     onMotionChanged: (Boolean) -> Unit,
+    onScreenSecurityChanged: (Boolean) -> Unit,
     onRequestNotificationPermission: () -> Unit,
     onRetentionChanged: (Int) -> Unit,
     onReplayOnboarding: () -> Unit,
@@ -264,6 +285,7 @@ private fun AttentionApp(
                         onReminderTimesChanged = onReminderTimesChanged,
                         onDarkThemeChanged = onDarkThemeChanged,
                         onMotionChanged = onMotionChanged,
+                        onScreenSecurityChanged = onScreenSecurityChanged,
                         onRequestNotificationPermission = onRequestNotificationPermission,
                         onRetentionChanged = onRetentionChanged,
                         onReplayOnboarding = onReplayOnboarding,

@@ -232,6 +232,15 @@ class MainViewModel(private val container: AppContainer) : ViewModel() {
         viewModelScope.launch { container.settingsRepository.setMotionEnabled(enabled) }
     }
 
+    fun setScreenSecurity(enabled: Boolean) {
+        viewModelScope.launch { container.settingsRepository.setScreenSecurity(enabled) }
+    }
+
+    /** Called once the share sheet has actually been handed the file. */
+    fun confirmExported(ids: List<Long>) {
+        viewModelScope.launch(Dispatchers.IO) { container.exportManager.confirmExported(ids) }
+    }
+
     fun completeOnboarding() {
         viewModelScope.launch { container.settingsRepository.completeOnboarding() }
     }

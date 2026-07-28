@@ -131,8 +131,39 @@ interface AttentionDao {
     @Query("DELETE FROM notification_events WHERE postedAt < :before")
     suspend fun deleteEventsBefore(before: Long): Int
 
-    @Query("DELETE FROM training_examples WHERE createdAt < :before AND exported = 1")
-    suspend fun deleteExportedTrainingBefore(before: Long): Int
+    /**
+     * Deletes aged training rows regardless of export status.
+     *
+     * This previously required `exported = 1`, so an unexported example — which carries a
+     * sender hash and a content embedding — was never removed by retention and accumulated
+     * for the life of the install.
+     */
+    @Query("DELETE FROM training_examples WHERE createdAt < :before")
+    suspend fun deleteTrainingBefore(before: Long): Int
+
+    /** Caps total training rows, keeping the most recent. Guards against unbounded growth. */
+    @Query(
+        """
+        DELETE FROM training_examples WHERE id NOT IN (
+            SELECT id FROM training_examples ORDER BY createdAt DESC LIMIT :keep
+        )
+        """,
+    )
+    suspend fun trimTrainingTo(keep: Int): Int
+
+    /** Sender memory for senders not seen within the retention horizon. */
+    @Query("DELETE FROM user_memory WHERE updatedAt < :before")
+    suspend fun deleteMemoryBefore(before: Long): Int
+
+    /** Caps sender memory rows, keeping the most recently updated. */
+    @Query(
+        """
+        DELETE FROM user_memory WHERE senderHash NOT IN (
+            SELECT senderHash FROM user_memory ORDER BY updatedAt DESC LIMIT :keep
+        )
+        """,
+    )
+    suspend fun trimMemoryTo(keep: Int): Int
 
     @Query("DELETE FROM notification_events")
     suspend fun deleteAllEvents()

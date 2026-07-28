@@ -80,6 +80,7 @@ internal fun SettingsScreen(
     onReminderTimesChanged: (Set<Int>) -> Unit,
     onDarkThemeChanged: (Boolean) -> Unit,
     onMotionChanged: (Boolean) -> Unit,
+    onScreenSecurityChanged: (Boolean) -> Unit,
     onRequestNotificationPermission: () -> Unit,
     onRetentionChanged: (Int) -> Unit,
     onReplayOnboarding: () -> Unit,
@@ -242,6 +243,18 @@ internal fun SettingsScreen(
                     },
                     checked = state.settings.motionEnabled,
                     onCheckedChange = onMotionChanged,
+                )
+                SoftDivider()
+                ToggleSettingRow(
+                    icon = Icons.Default.Lock,
+                    title = stringResource(R.string.settings_hide_from_screenshots),
+                    subtitle = if (state.settings.screenSecurity) {
+                        stringResource(R.string.settings_screen_security_on)
+                    } else {
+                        stringResource(R.string.settings_screen_security_off)
+                    },
+                    checked = state.settings.screenSecurity,
+                    onCheckedChange = onScreenSecurityChanged,
                 )
             }
         }

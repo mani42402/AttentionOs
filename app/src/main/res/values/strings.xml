@@ -82,4 +82,7 @@
     <string name="settings_store_message_content">Store message content</string>
     <string name="settings_useful_but_usually_able_to_wait">Useful, but usually able to wait</string>
     <string name="settings_your_data">Your data</string>
+    <string name="settings_hide_from_screenshots">Hide from screenshots</string>
+    <string name="settings_screen_security_on">Notification content is hidden from screenshots and the recent apps preview</string>
+    <string name="settings_screen_security_off">Screenshots and screen recording can capture notification content</string>
 </resources>

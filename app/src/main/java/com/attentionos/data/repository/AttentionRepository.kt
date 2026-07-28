@@ -292,10 +292,22 @@ class AttentionRepository(
         }
     }
 
+    /**
+     * Applies the user's retention setting to every table that accumulates personal data.
+     *
+     * Previously this pruned events and *exported* training rows only, so unexported examples
+     * and all sender memory grew without bound no matter what retention the user chose — the
+     * setting quietly did not mean what it said. Hard caps bound the worst case even when a
+     * device has not been idle enough for this job to run recently.
+     */
     suspend fun prune(retentionDays: Int) {
-        val before = System.currentTimeMillis() - retentionDays * TimeConstants.DAY_MILLIS
+        val now = System.currentTimeMillis()
+        val before = now - retentionDays * TimeConstants.DAY_MILLIS
         dao.deleteEventsBefore(before)
-        dao.deleteExportedTrainingBefore(before)
+        dao.deleteTrainingBefore(before)
+        dao.trimTrainingTo(MAX_TRAINING_ROWS)
+        dao.deleteMemoryBefore(now - MEMORY_RETENTION_MILLIS)
+        dao.trimMemoryTo(MAX_MEMORY_ROWS)
     }
 
     suspend fun exportableTraining(): List<TrainingExampleEntity> = dao.trainingForExport()
@@ -488,6 +500,11 @@ class AttentionRepository(
     private companion object {
         const val HIGH_PRIORITY_THRESHOLD = 0.68f
         const val LATENCY_WINDOW_MILLIS = 7L * TimeConstants.DAY_MILLIS
+
+        /** Sender memory outlives events so learned importance survives a short retention. */
+        const val MEMORY_RETENTION_MILLIS = 180L * TimeConstants.DAY_MILLIS
+        const val MAX_TRAINING_ROWS = 5_000
+        const val MAX_MEMORY_ROWS = 2_000
 
         val testScenarios = listOf(
             TestScenario(
