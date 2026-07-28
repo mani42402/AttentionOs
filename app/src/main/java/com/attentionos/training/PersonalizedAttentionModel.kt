@@ -26,7 +26,16 @@ object PersonalizedAttentionModel {
     const val MIN_IMPORTANT_EVALUATIONS = 8
     const val MIN_ACCURACY = 0.65f
     const val MIN_IMPORTANT_RECALL = 0.80f
-    const val MODEL_VERSION = 1
+    /**
+     * Feature-space version.
+     *
+     * Bump whenever the embedding that feeds the classifier changes. Weights learned against a
+     * different encoder describe a different space entirely, so reusing them would silently
+     * produce nonsense rather than fail. A mismatch discards the stored model and relearns.
+     *
+     * v2: encoder moved from paraphrase-MiniLM-L3-v2 to all-MiniLM-L6-v2.
+     */
+    const val MODEL_VERSION = 2
 
     fun features(
         embedding: FloatArray?,
