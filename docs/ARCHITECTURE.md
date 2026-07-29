@@ -152,6 +152,11 @@ device-independent enough to compare directly.
 The encoder load reads a 29,528-line vocabulary and maps the table. It happens once per process
 on the first notification, off the UI thread, and never again.
 
+Verified on the minified release build (R8 + resource shrinking, signed with a debug keystore for
+local install): the encoder loads once, notifications classify, the encrypted database is created,
+and no keep-rule was missed — zero crashes and zero keyword-fallback warnings, which is what a
+stripped class or a shrunk asset would produce.
+
 A **baseline profile and macrobenchmark are deliberately not here.** The plan schedules them
 after Phase 2, they need a separate benchmark module, and the startup figure above does not yet
 show a problem worth that infrastructure. Startup should be re-measured on real hardware before
