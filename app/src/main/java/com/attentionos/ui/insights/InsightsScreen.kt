@@ -8,6 +8,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -30,43 +31,44 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.progressBarRangeInfo
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.attentionos.data.repository.AttentionTestResult
+import com.attentionos.R
 import com.attentionos.ui.MainUiState
-import com.attentionos.ui.components.AttentionCard
 import com.attentionos.ui.components.ErrorState
-import com.attentionos.ui.components.GroupLabel
 import com.attentionos.ui.components.HSpace
+import com.attentionos.ui.components.OnDeviceBadge
 import com.attentionos.ui.components.PriorityChip
-import com.attentionos.ui.components.StatusDot
+import com.attentionos.ui.components.SignalCard
+import com.attentionos.ui.components.SignalDot
+import com.attentionos.ui.components.SignalEyebrow
+import com.attentionos.ui.components.FeatureSurfaceMutedColor
+import com.attentionos.ui.components.SignalFeatureSurface
+import com.attentionos.ui.components.SignalScreenHeader
+import com.attentionos.ui.components.SignalSectionHeader
 import com.attentionos.ui.components.VSpace
 import com.attentionos.ui.theme.AttentionTheme
 import com.attentionos.ui.theme.Motion
-import com.attentionos.ui.theme.PriorityColors
-import com.attentionos.ui.theme.Radius
+import com.attentionos.ui.theme.SignalColors
 import com.attentionos.ui.theme.Spacing
 import com.attentionos.ui.theme.ThemeMode
 import com.attentionos.ui.theme.motionEnabled
 import com.attentionos.ui.theme.rememberHaptics
 import kotlin.math.roundToInt
 
-/**
- * Insights.
- *
- * The tab this replaces was a 65-line placeholder repeating a card from Home, while a much
- * richer screen sat in the codebase wired to nothing. This rebuilds that idea properly: what the
- * helper did, how well it is learning, and a way to watch it think.
- *
- * The on-device test moved here from onboarding. Making a five-scenario diagnostic a *gate*
- * before someone could finish setup was backwards — it answers "show me it works", which people
- * want once they are curious, not before they have used the app once.
- */
 @Composable
 internal fun InsightsScreen(
     state: MainUiState,
@@ -83,151 +85,201 @@ internal fun InsightsScreen(
         verticalArrangement = Arrangement.spacedBy(Spacing.lg),
     ) {
         item {
-            Column(Modifier.statusBarsPadding()) {
-                VSpace(Spacing.lg)
-                Text("Insights", style = MaterialTheme.typography.headlineMedium)
-                VSpace(Spacing.xs)
+            SignalScreenHeader(
+                title = stringResource(R.string.insights_summary),
+                subtitle = stringResource(R.string.insights_what_your_helper_handled_and_how_safely),
+                modifier = Modifier
+                    .statusBarsPadding()
+                    .padding(top = Spacing.lg),
+                trailing = { OnDeviceBadge() },
+            )
+        }
+        item { TodaySummary(state) }
+        item { ImpactMetrics(state) }
+        item { LearningJourney(state, onReview) }
+        item { SafetyPromise() }
+        item { SignalSectionHeader(stringResource(R.string.insights_see_the_model_work)) }
+        item { TestLab(state, onRunTestLab) }
+        item {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = Spacing.sm),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center,
+            ) {
+                SignalDot(MaterialTheme.colorScheme.primary, size = 6.dp)
+                HSpace(Spacing.sm)
                 Text(
-                    "What your helper handled, and how well it knows you.",
-                    style = MaterialTheme.typography.bodyMedium,
+                    stringResource(R.string.insights_computed_only_on_this_device_nothing_was),
+                    style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
         }
+    }
+}
 
-        item { AttentionSplitCard(state) }
-        item { LearningJourneyCard(state, onReview) }
-        item { ProtectionCard() }
-        item { GroupLabel("See it work") }
-        item { TestLabCard(state, onRunTestLab) }
-        item {
+@Composable
+private fun TodaySummary(state: MainUiState) {
+    val total = state.receivedToday.coerceAtLeast(1)
+    val normal = (state.receivedToday - state.importantToday - state.queuedToday).coerceAtLeast(0)
+    val important = state.importantToday.toFloat() / total
+    val normalFraction = normal.toFloat() / total
+    val quiet = state.queuedToday.toFloat() / total
+
+    SignalFeatureSurface {
+        Column {
+            SignalEyebrow(stringResource(R.string.insights_today_at_a_glance), color = FeatureSurfaceMutedColor)
+            VSpace(Spacing.md)
+            Row(verticalAlignment = Alignment.Bottom) {
+                Text(
+                    state.receivedToday.toString(),
+                    style = MaterialTheme.typography.displayLarge,
+                )
+                HSpace(Spacing.sm)
+                Text(
+                    "checked",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = FeatureSurfaceMutedColor,
+                    modifier = Modifier.padding(bottom = Spacing.md),
+                )
+            }
+            VSpace(Spacing.lg)
+            DistributionBar(
+                important = important,
+                normal = normalFraction,
+                quiet = quiet,
+                hasData = state.receivedToday > 0,
+            )
+            VSpace(Spacing.lg)
+            Row(horizontalArrangement = Arrangement.spacedBy(Spacing.md)) {
+                SummaryLegend(
+                    state.importantToday,
+                    stringResource(R.string.insights_needed_attention),
+                    SignalColors.Tangerine,
+                    Modifier.weight(1f),
+                )
+                SummaryLegend(normal, "normal", SignalColors.Sun, Modifier.weight(1f))
+                SummaryLegend(
+                    state.queuedToday,
+                    stringResource(R.string.insights_stayed_quiet),
+                    SignalColors.Mint,
+                    Modifier.weight(1f),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun DistributionBar(
+    important: Float,
+    normal: Float,
+    quiet: Float,
+    hasData: Boolean,
+) {
+    val enabled = motionEnabled()
+    val reveal by animateFloatAsState(
+        targetValue = if (hasData) 1f else 0f,
+        animationSpec = Motion.gentle(enabled),
+        label = "summary-distribution",
+    )
+    val spoken = if (hasData) {
+        stringResource(R.string.insights_percent_needed_attention, (important * 100).roundToInt()) +
+            stringResource(R.string.insights_percent_stayed_quiet, (quiet * 100).roundToInt())
+    } else {
+        stringResource(R.string.insights_no_notifications_checked_today)
+    }
+    Canvas(
+        Modifier
+            .fillMaxWidth()
+            .height(14.dp)
+            .semantics { contentDescription = spoken },
+    ) {
+        val radius = CornerRadius(size.height / 2f)
+        drawRoundRect(SignalColors.Cream.copy(alpha = 0.12f), cornerRadius = radius)
+        if (!hasData) return@Canvas
+
+        var x = 0f
+        listOf(
+            important to SignalColors.Tangerine,
+            normal to SignalColors.Sun,
+            quiet to SignalColors.Mint,
+        ).forEach { (fraction, color) ->
+            val width = size.width * fraction.coerceAtLeast(0f) * reveal
+            if (width > 0f) {
+                drawRoundRect(
+                    color,
+                    topLeft = Offset(x, 0f),
+                    size = Size(width, size.height),
+                    cornerRadius = radius,
+                )
+                x += width
+            }
+        }
+    }
+}
+
+@Composable
+private fun SummaryLegend(value: Int, label: String, color: Color, modifier: Modifier = Modifier) {
+    // "2, needed attention" as one announcement rather than two disconnected fragments.
+    Column(modifier.semantics(mergeDescendants = true) {}) {
+        Text(value.toString(), style = MaterialTheme.typography.headlineSmall, color = color)
+        Text(
+            label,
+            style = MaterialTheme.typography.labelSmall,
+            color = FeatureSurfaceMutedColor,
+        )
+    }
+}
+
+@Composable
+private fun ImpactMetrics(state: MainUiState) {
+    Row(horizontalArrangement = Arrangement.spacedBy(Spacing.md)) {
+        SignalCard(
+            modifier = Modifier.weight(1f),
+            fill = MaterialTheme.colorScheme.primaryContainer,
+            border = MaterialTheme.colorScheme.primary.copy(alpha = 0.22f),
+        ) {
             Text(
-                "Everything here was computed on this device. Nothing was uploaded.",
+                stringResource(R.string.insights_min, state.estimatedMinutesSaved),
+                style = MaterialTheme.typography.headlineMedium,
+                color = MaterialTheme.colorScheme.onPrimaryContainer,
+            )
+            VSpace(Spacing.xs)
+            Text(
+                stringResource(R.string.insights_focus_protected),
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = Spacing.sm),
+                color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.74f),
+            )
+        }
+        SignalCard(
+            modifier = Modifier.weight(1f),
+            fill = MaterialTheme.colorScheme.tertiaryContainer,
+            border = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.22f),
+        ) {
+            Text(
+                state.averageAnalysisMillis?.let { stringResource(R.string.insights_ms, it.roundToInt()) } ?: stringResource(R.string.insights_local),
+                style = MaterialTheme.typography.headlineMedium,
+                color = MaterialTheme.colorScheme.onTertiaryContainer,
+            )
+            VSpace(Spacing.xs)
+            Text(
+                if (state.averageAnalysisMillis == null) {
+                    stringResource(R.string.insights_analysis_ready)
+                } else {
+                    stringResource(R.string.insights_average_analysis)
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.74f),
             )
         }
     }
 }
 
-/** How today's notifications were split, as a ring rather than a row of numbers. */
 @Composable
-private fun AttentionSplitCard(state: MainUiState) {
-    val enabled = motionEnabled()
-    val total = state.receivedToday.coerceAtLeast(1)
-    val importantFraction by animateFloatAsState(
-        targetValue = state.importantToday.toFloat() / total,
-        animationSpec = Motion.gentle(enabled),
-        label = "ring-important",
-    )
-    val quietFraction by animateFloatAsState(
-        targetValue = state.queuedToday.toFloat() / total,
-        animationSpec = Motion.gentle(enabled),
-        label = "ring-quiet",
-    )
-
-    AttentionCard {
-        Text(
-            "TODAY",
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.primary,
-        )
-        VSpace(Spacing.lg)
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(contentAlignment = Alignment.Center) {
-                AttentionRing(
-                    importantFraction = importantFraction,
-                    quietFraction = quietFraction,
-                    hasData = state.receivedToday > 0,
-                )
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(
-                        state.receivedToday.toString(),
-                        style = MaterialTheme.typography.headlineSmall,
-                    )
-                    Text(
-                        "checked",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
-            HSpace(Spacing.xl)
-            Column(verticalArrangement = Arrangement.spacedBy(Spacing.md)) {
-                LegendRow(PriorityColors.high, state.importantToday, "needed attention")
-                LegendRow(PriorityColors.low, state.queuedToday, "stayed quiet")
-                if (state.estimatedMinutesSaved > 0) {
-                    Text(
-                        "≈ ${state.estimatedMinutesSaved} min of focus protected",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun AttentionRing(importantFraction: Float, quietFraction: Float, hasData: Boolean) {
-    val track = Color.White.copy(alpha = 0.16f)
-    Canvas(
-        modifier = Modifier
-            .size(116.dp)
-            .semantics {
-                contentDescription = if (!hasData) {
-                    "No notifications yet today"
-                } else {
-                    "${(importantFraction * 100).roundToInt()} percent needed attention, " +
-                        "${(quietFraction * 100).roundToInt()} percent stayed quiet"
-                }
-            },
-    ) {
-        val stroke = Stroke(width = 12.dp.toPx(), cap = StrokeCap.Round)
-        drawArc(color = track, startAngle = 0f, sweepAngle = 360f, useCenter = false, style = stroke)
-        if (!hasData) return@Canvas
-        drawArc(
-            color = PriorityColors.high,
-            startAngle = -90f,
-            sweepAngle = 360f * importantFraction,
-            useCenter = false,
-            style = stroke,
-        )
-        drawArc(
-            color = PriorityColors.low,
-            startAngle = -90f + 360f * importantFraction,
-            sweepAngle = 360f * quietFraction,
-            useCenter = false,
-            style = stroke,
-        )
-    }
-}
-
-@Composable
-private fun LegendRow(accent: Color, value: Int, label: String) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        StatusDot(accent, size = 8.dp)
-        HSpace(Spacing.sm)
-        Text(value.toString(), style = MaterialTheme.typography.titleMedium)
-        HSpace(Spacing.xs)
-        Text(
-            label,
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-    }
-}
-
-/**
- * Learning progress in plain language.
- *
- * Deliberately does not expose the gate arithmetic. Accuracy thresholds and evaluation counts
- * are an implementation concern, and showing them would invite people to optimise a number
- * rather than answer honestly.
- */
-@Composable
-private fun LearningJourneyCard(state: MainUiState, onReview: () -> Unit) {
+private fun LearningJourney(state: MainUiState, onReview: () -> Unit) {
     val corrections = state.personalizedModel.exampleCount
     val enabled = motionEnabled()
     val progress by animateFloatAsState(
@@ -236,46 +288,44 @@ private fun LearningJourneyCard(state: MainUiState, onReview: () -> Unit) {
         label = "learning-progress",
     )
 
-    AttentionCard {
-        Text(
-            "LEARNING",
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.primary,
-        )
-        VSpace(Spacing.md)
+    SignalCard {
+        SignalEyebrow(stringResource(R.string.insights_personal_learning))
+        VSpace(Spacing.sm)
         Text(
             text = when {
-                state.personalModelActive -> "Personalized to you"
-                corrections == 0 -> "Not learning yet"
-                else -> "Getting to know you"
+                state.personalModelActive -> stringResource(R.string.insights_personalized_to_you)
+                corrections == 0 -> stringResource(R.string.insights_ready_for_your_first_correction)
+                else -> stringResource(R.string.insights_learning_your_rhythm)
             },
-            style = MaterialTheme.typography.titleLarge,
+            style = MaterialTheme.typography.headlineSmall,
         )
-        VSpace(Spacing.xs)
+        VSpace(Spacing.sm)
         Text(
             text = when {
                 state.personalModelActive ->
-                    "Your corrections now shape how notifications are ranked."
-                corrections == 0 ->
-                    "Mark a few notifications important or not, and your helper starts adapting."
+                    stringResource(R.string.insights_your_corrections_now_help_rank_notifications_with)
                 !state.pilotComplete ->
-                    "Watching quietly for the first week so it can check itself before changing anything."
+                    stringResource(R.string.insights_the_model_is_observing_during_its_seven)
                 else ->
-                    "A few more corrections and it can start applying what it has learned."
+                    stringResource(R.string.insights_keep_reviewing_decisions_so_the_personal_model)
             },
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-
         VSpace(Spacing.lg)
-        ProgressTrack(progress)
+        LearningTrack(progress)
         VSpace(Spacing.sm)
         Text(
-            "$corrections of $TARGET_CORRECTIONS corrections",
-            style = MaterialTheme.typography.bodySmall,
+            stringResource(R.string.insights_of_corrections, corrections, TARGET_CORRECTIONS),
+            style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-
+        VSpace(Spacing.md)
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Milestone(stringResource(R.string.insights_observing), true)
+            Milestone(stringResource(R.string.insights_adapting), progress >= 0.35f)
+            Milestone(stringResource(R.string.insights_personalized), state.personalModelActive)
+        }
         AnimatedVisibility(
             visible = state.unreviewedEvents.isNotEmpty(),
             enter = fadeIn() + expandVertically(),
@@ -284,7 +334,7 @@ private fun LearningJourneyCard(state: MainUiState, onReview: () -> Unit) {
             Column {
                 VSpace(Spacing.md)
                 TextButton(onClick = onReview) {
-                    Text("Review ${state.unreviewedEvents.size} waiting")
+                    Text(stringResource(R.string.insights_review_waiting, state.unreviewedEvents.size))
                 }
             }
         }
@@ -292,88 +342,119 @@ private fun LearningJourneyCard(state: MainUiState, onReview: () -> Unit) {
 }
 
 @Composable
-private fun ProgressTrack(progress: Float) {
-    val track = Color.White.copy(alpha = 0.16f)
+private fun LearningTrack(progress: Float) {
     val fill = MaterialTheme.colorScheme.primary
+    val track = MaterialTheme.colorScheme.outlineVariant
+    val spoken =
+        stringResource(R.string.insights_percent_toward_personalization, (progress * 100).roundToInt())
     Canvas(
-        modifier = Modifier
+        Modifier
             .fillMaxWidth()
-            .height(Spacing.sm)
+            .height(9.dp)
             .semantics {
-                contentDescription =
-                    "${(progress * 100).roundToInt()} percent toward personalization"
+                contentDescription = spoken
+                progressBarRangeInfo = ProgressBarRangeInfo(progress.coerceIn(0f, 1f), 0f..1f)
             },
     ) {
-        val radius = androidx.compose.ui.geometry.CornerRadius(size.height / 2f)
-        drawRoundRect(color = track, cornerRadius = radius)
-        if (progress <= 0f) return@Canvas
-        drawRoundRect(
-            color = fill,
-            size = androidx.compose.ui.geometry.Size(size.width * progress, size.height),
-            cornerRadius = radius,
+        val gap = 4.dp.toPx()
+        val segments = 7
+        val width = (size.width - gap * (segments - 1)) / segments
+        repeat(segments) { index ->
+            val complete = progress * segments > index
+            drawRoundRect(
+                color = if (complete) fill else track,
+                topLeft = Offset(index * (width + gap), 0f),
+                size = Size(width, size.height),
+                cornerRadius = CornerRadius(size.height / 2f),
+            )
+        }
+    }
+}
+
+@Composable
+private fun Milestone(label: String, active: Boolean) {
+    Row(
+        modifier = Modifier.semantics(mergeDescendants = true) {},
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            Modifier
+                .size(8.dp)
+                .background(
+                    if (active) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.outlineVariant
+                    },
+                    androidx.compose.foundation.shape.CircleShape,
+                ),
+        )
+        HSpace(Spacing.xs)
+        Text(
+            label,
+            style = MaterialTheme.typography.labelSmall,
+            color = if (active) {
+                MaterialTheme.colorScheme.onSurface
+            } else {
+                MaterialTheme.colorScheme.onSurfaceVariant
+            },
         )
     }
 }
 
-/** The safety promise, stated plainly. */
 @Composable
-private fun ProtectionCard() {
-    AttentionCard(tone = MaterialTheme.colorScheme.secondaryContainer) {
+private fun SafetyPromise() {
+    SignalCard(
+        fill = MaterialTheme.colorScheme.secondaryContainer,
+        border = MaterialTheme.colorScheme.secondary.copy(alpha = 0.22f),
+    ) {
         Text(
-            "Always gets through",
+            stringResource(R.string.insights_protected_alerts_stay_protected),
             style = MaterialTheme.typography.titleMedium,
             color = MaterialTheme.colorScheme.onSecondaryContainer,
         )
-        VSpace(Spacing.sm)
+        VSpace(Spacing.md)
         listOf(
-            "Security codes and login alerts",
-            "Bank and payment activity",
-            "Incoming calls and alarms",
+            stringResource(R.string.insights_security_codes_and_login_alerts),
+            stringResource(R.string.insights_bank_and_payment_activity),
+            stringResource(R.string.insights_incoming_calls_and_alarms),
         ).forEach { line ->
             Row(
                 modifier = Modifier.padding(vertical = Spacing.xs),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                StatusDot(MaterialTheme.colorScheme.onSecondaryContainer, size = 5.dp)
+                SignalDot(MaterialTheme.colorScheme.secondary, size = 6.dp)
                 HSpace(Spacing.sm)
                 Text(
                     line,
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.9f),
+                    color = MaterialTheme.colorScheme.onSecondaryContainer,
                 )
             }
         }
         VSpace(Spacing.sm)
         Text(
-            "These are never held back, whatever your helper learns.",
+            stringResource(R.string.insights_personalization_can_never_lower_these_deterministic_safety),
             style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.75f),
+            color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.72f),
         )
     }
 }
 
-/**
- * Run the real classifier over five example notifications.
- *
- * Moved out of onboarding, where it blocked completion. Here it answers "does this actually
- * work?" for someone who is curious, and the timings are real, measured on their device.
- */
 @Composable
-private fun TestLabCard(state: MainUiState, onRun: () -> Unit) {
+private fun TestLab(state: MainUiState, onRun: () -> Unit) {
     val lab = state.testLab
     val haptics = rememberHaptics()
 
-    AttentionCard {
-        Text("Watch it decide", style = MaterialTheme.typography.titleMedium)
+    SignalCard {
+        Text(stringResource(R.string.insights_watch_it_decide), style = MaterialTheme.typography.titleMedium)
         VSpace(Spacing.xs)
         Text(
-            "Runs five example notifications through the real on-device model. Nothing is posted " +
-                "and nothing is saved.",
+            stringResource(R.string.insights_runs_five_examples_through_the_real_local),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         VSpace(Spacing.md)
-
         Button(
             onClick = {
                 haptics.select()
@@ -388,19 +469,19 @@ private fun TestLabCard(state: MainUiState, onRun: () -> Unit) {
                     color = MaterialTheme.colorScheme.onPrimary,
                 )
                 HSpace(Spacing.sm)
-                Text("Running…")
+                Text(stringResource(R.string.insights_running))
             } else {
-                Text(if (lab.results.isEmpty()) "Run the check" else "Run it again")
+                Text(if (lab.results.isEmpty()) stringResource(R.string.insights_run_the_check) else stringResource(R.string.insights_run_it_again))
             }
         }
 
         lab.error?.let { message ->
             VSpace(Spacing.md)
             ErrorState(
-                title = "Could not run the check",
+                title = stringResource(R.string.insights_could_not_run_the_check),
                 description = message,
                 onRetry = onRun,
-                retryLabel = "Try again",
+                retryLabel = stringResource(R.string.insights_try_again),
             )
         }
 
@@ -419,50 +500,47 @@ private fun TestLabCard(state: MainUiState, onRun: () -> Unit) {
 
 @Composable
 private fun TestResultRow(result: AttentionTestResult) {
-    Surface(
+    Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = Spacing.xs),
-        shape = Radius.card,
-        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+            .padding(vertical = Spacing.sm),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Row(
-            modifier = Modifier.padding(Spacing.md),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column(Modifier.weight(1f)) {
-                Text(result.name, style = MaterialTheme.typography.titleSmall)
-                Text(
-                    text = "${result.durationMillis} ms · " +
-                        result.category.name.lowercase().replaceFirstChar { it.uppercase() },
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            if (result.safetyProtected) {
-                Box(
-                    modifier = Modifier
-                        .background(MaterialTheme.colorScheme.secondaryContainer, Radius.pill)
-                        .padding(horizontal = Spacing.sm, vertical = 3.dp),
-                ) {
-                    Text(
-                        "protected",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSecondaryContainer,
-                    )
-                }
-                HSpace(Spacing.sm)
-            }
-            PriorityChip(result.finalPriority)
+        Column(Modifier.weight(1f)) {
+            Text(result.name, style = MaterialTheme.typography.titleSmall)
+            Text(
+                stringResource(R.string.insights_ms_2, result.durationMillis) +
+                    result.category.name.lowercase().replaceFirstChar { it.uppercase() },
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
+        if (result.safetyProtected) {
+            Text(
+                stringResource(R.string.insights_protected),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier
+                    .clip(MaterialTheme.shapes.small)
+                    .background(MaterialTheme.colorScheme.primaryContainer)
+                    .border(
+                        1.dp,
+                        MaterialTheme.colorScheme.primary.copy(alpha = 0.18f),
+                        MaterialTheme.shapes.small,
+                    )
+                    .padding(horizontal = Spacing.sm, vertical = Spacing.xs),
+            )
+            HSpace(Spacing.sm)
+        }
+        PriorityChip(result.finalPriority)
     }
 }
 
 private const val TARGET_CORRECTIONS = 50
 
-@Preview(name = "Insights · light", heightDp = 1100)
+@Preview(name = "Summary · light", heightDp = 1200)
 @Composable
-private fun InsightsPreview() {
+private fun SummaryPreview() {
     AttentionTheme(themeMode = ThemeMode.Light) {
         Surface(color = MaterialTheme.colorScheme.background) {
             InsightsScreen(
@@ -479,9 +557,9 @@ private fun InsightsPreview() {
     }
 }
 
-@Preview(name = "Insights · dark", heightDp = 1100)
+@Preview(name = "Summary · dark", heightDp = 1200)
 @Composable
-private fun InsightsDarkPreview() {
+private fun SummaryDarkPreview() {
     AttentionTheme(themeMode = ThemeMode.Dark) {
         Surface(color = MaterialTheme.colorScheme.background) {
             InsightsScreen(

@@ -9,6 +9,7 @@ import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
@@ -32,6 +33,14 @@ enum class ThemeMode {
             entries.firstOrNull { it.name == value } ?: System
     }
 }
+
+/**
+ * Whether the app is currently rendering dark.
+ *
+ * Components must read this rather than [isSystemInDarkTheme], or a user who overrides the
+ * system setting gets a light card on a dark canvas.
+ */
+val LocalDarkTheme = staticCompositionLocalOf { false }
 
 @Composable
 fun AttentionTheme(
@@ -73,7 +82,10 @@ fun AttentionTheme(
         }
     }
 
-    CompositionLocalProvider(LocalMotionEnabled provides motionEnabled) {
+    CompositionLocalProvider(
+        LocalMotionEnabled provides motionEnabled,
+        LocalDarkTheme provides darkTheme,
+    ) {
         MaterialTheme(
             colorScheme = colorScheme,
             typography = AttentionTypography,

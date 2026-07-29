@@ -1,100 +1,93 @@
-# AttentionOS visual language
+# AttentionOS visual system — Signal Garden
 
-Derived from the reference designs supplied for this project (weather, wallet, smart-home and
-navigation kits). Those references disagree on subject matter and agree almost perfectly on
-treatment, so this document captures the treatment.
+Signal Garden makes the local notification pipeline visible without turning the app into a
+technical dashboard. Notifications move through paths, protected information stays inside nested
+forms, and personal learning grows as a branching structure.
 
-## The rule that matters most
+## Principles
 
-**The canvas is never flat.** A single background colour — white or black — was the defining
-problem with the previous build. Every screen sits on a deep gradient that shifts across its
-surface, and content floats above it on translucent glass.
-
-Everything below follows from that.
+1. **Calm before novelty.** Motion explains sorting, protection, and learning; it never exists only
+   to attract attention.
+2. **One feature surface per screen.** The primary story gets a deep ink panel. Supporting content
+   uses open layouts, dividers, and matte cards.
+3. **Real data only.** Counts, progress, timing, storage, and notification content always come from
+   existing state. The UI does not invent scores or weekly history.
+4. **Same identity in both themes.** Light mode renders the system on warm paper; dark mode renders
+   it in ink teal. Tangerine, mint, and sun keep the same meaning.
+5. **Native controls stay native.** Text, toggles, buttons, progress, and semantics are Compose
+   elements. Raster artwork is restricted to the three onboarding backgrounds.
 
 ## Palette
 
-Dark-first. The gradient canvas is the identity; light mode is a lighter rendering of the same
-idea, not a different design.
-
 | Role | Dark | Light |
 |---|---|---|
-| Canvas top | `#1B1044` deep violet | `#EFE9FF` |
-| Canvas mid | `#241556` | `#F5F1FF` |
-| Canvas bottom | `#0E0A24` near-black violet | `#FBF9FF` |
-| Accent (primary) | `#7C5CFF` violet | `#5B3FE0` |
-| Accent glow | `#A78BFA` | `#7C5CFF` |
-| Secondary | `#38E0C0` mint | `#0E9E86` |
-| Glass fill | `#FFFFFF` @ 8% | `#FFFFFF` @ 62% |
-| Glass border | `#FFFFFF` @ 14% | `#FFFFFF` @ 80% |
-| Text primary | `#F4F1FF` | `#1A1230` |
-| Text secondary | `#B9B2D8` | `#5C5480` |
+| Canvas | `#06171B` | `#F5F0E4` |
+| Raised surface | `#0D2529` | `#FFFCF4` |
+| Primary text | `#F6EEDC` | `#10262A` |
+| Secondary text | `#AFC1BB` | `#526367` |
+| Action / important | `#FF7346` | `#C64A24` |
+| Calm / local / quiet | `#66E0BE` | `#0E6B59` |
+| Normal / learning | `#F4C95D` | `#765607` |
 
-Priority colours stay semantic and constant across themes, so "amber means it can wait" is
-learned once:
+Priority colors remain semantic:
 
-| Priority | Colour |
-|---|---|
-| Urgent | `#FF5A6E` |
-| Important | `#FF9F45` |
-| Normal | `#7C5CFF` |
-| Can wait | `#38E0C0` |
-| Quiet | `#8B85AD` |
+- urgent — coral;
+- important — tangerine;
+- normal — sun;
+- can wait — mint;
+- quiet — blue-grey.
 
-## Surfaces
+## Type and shape
 
-**Aurora canvas.** A vertical gradient through the three canvas stops, with two large soft
-radial blooms — violet top-left, mint bottom-right — drifting slowly. Motion is barely
-perceptible by design: it should read as depth, not as animation.
-
-**Glass card.** Translucent fill over the canvas, a 1dp hairline border at higher opacity along
-the top edge, and a 24dp radius. Depth comes from the border catching light, not from shadows.
-
-**Feature card.** For hero content: a gradient fill in the accent family plus a diagonal light
-streak running corner to corner, exactly as in the weather references. Reserved for one element
-per screen so it stays special.
-
-**Bento tiles.** Small glass squares carrying a single figure each, arranged two or three across.
-Some carry a radial gauge, one carries a sparkline. This is what replaces uniform stacked rows.
-
-## Type
-
-Inter throughout, but the hierarchy is far more extreme than before: hero numerals are enormous
-and their labels are small and quiet. The references get their impact from that contrast, not
-from many different sizes.
-
-| Use | Size / weight |
-|---|---|
-| Hero numeral | 64sp ExtraBold, −2 tracking |
-| Screen title | 30sp Bold, −0.6 |
-| Card title | 19sp SemiBold |
-| Body | 15sp Regular |
-| Label | 12sp SemiBold, +0.4, often uppercase |
-
-## Shape and spacing
-
-Radii: tiles 20dp, cards 24dp, hero 28dp, pills fully rounded. Spacing stays on the 4dp grid,
-with 20dp screen gutters and 16dp between cards.
+Inter is used throughout. Screen headings are deliberately large and compact; uppercase eyebrows
+use additional tracking. Cards use 24dp corners, feature surfaces use 28dp, controls use fully
+rounded pills, and screen gutters remain 20dp.
 
 ## Motion
 
-Ambient drift on the canvas, content animating in on entry, numerals counting up, gauges
-sweeping on change. All of it collapses to nothing when the reduced-motion preference is off —
-that is enforced by the `Motion` helpers rather than left to each call site.
+- small control response: spring, roughly 180ms perceived;
+- content entrance and chart changes: gentle spring, 280–420ms;
+- onboarding background drift: 8 seconds;
+- sorting particles: 5.6 seconds;
+- privacy shell pulse: staggered 5.6-second loop;
+- learning milestones: sequential pulse along seven points.
 
-## Navigation
+The existing Reduced Motion preference collapses all app motion to a static state through the
+shared `Motion` helpers and `LocalMotionEnabled`.
 
-Bottom bar as a floating glass pill rather than a full-width slab. The active tab is a filled
-violet pill with icon and label; inactive tabs show the icon alone. Taken from the e-commerce and
-fintech patterns in the navigation kit.
+## Components
+
+One canonical set, in `ui/components/SignalComponents.kt`. Screens build from these and nothing
+else, so a change lands everywhere at once:
+
+| Component | Role |
+|---|---|
+| `SignalCard` | standard container: matte fill, one hairline |
+| `SignalFeatureSurface` | the single inverted ink surface per screen, in both themes |
+| `SignalScreenHeader` | screen title and subtitle |
+| `SignalSectionHeader` | section title with an optional action |
+| `SignalEyebrow` | uppercase label above a heading |
+| `SignalDot` | status dot |
+| `AttentionBrand`, `OnDeviceBadge` | wordmark and the on-device assurance pill |
+
+`SignalFeatureSurface` provides its own content colour — do not restate `color =` on text inside
+it. Doing so is how a light-mode-only invisible-text bug gets in.
+
+Every user-visible string lives in `res/values/strings.xml`; screens read them with
+`stringResource`. Counts use `<plurals>`. Compose animation `label =` arguments are diagnostic
+identifiers, not copy, and stay as literals.
+
+Charts encode data. A lane, bar or ring whose geometry is fixed regardless of the value is not
+allowed — an empty measurement must render empty.
 
 ## Screen mapping
 
-- **Onboarding** — full-bleed aurora, one large illustrative mark per page, oversized headline,
-  pill indicator, glass Continue button.
-- **Home** — feature card with the day's count as a hero numeral, a bento row beneath
-  (needed attention / stayed quiet / focus protected), then notifications as glass rows.
-- **Review** — the decision card is a feature card on the aurora; swiping tilts it and bleeds
-  the outcome colour into the canvas behind.
-- **Insights** — bento grid: attention ring, learning gauge, 7-day sparkline, protection card.
-- **Settings** — glass groups on the aurora, with the segmented theme control as a glass pill.
+- **Onboarding:** three full-bleed chapters—prioritization, privacy, learning. Notification access
+  and interruption preferences remain available inside those pages.
+- **Home:** protection status, live attention-flow lanes, real focus estimate, review prompt, and
+  recent decisions.
+- **Review:** decision history plus an inverse-surface swipe deck with explicit accessible actions.
+- **Summary:** today’s distribution, real inference timing, learning progress, safety floors, and
+  the existing local test lab.
+- **Settings:** control-center status followed by every existing preference, storage summary,
+  export, reset, replay, retention, reminders, and deletion.

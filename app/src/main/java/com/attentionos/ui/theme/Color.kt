@@ -5,172 +5,139 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.ui.graphics.Color
 
 /**
- * The AttentionOS colour system.
+ * Signal Garden.
  *
- * Built as a full Material 3 scheme rather than a handful of brand colours. The previous palette
- * defined fourteen raw values and left every `surfaceContainer*` role unset, so cards, sheets and
- * elevated surfaces silently fell back to Material's default purple-derived baseline — which is
- * much of why the app read as generic regardless of the brand colours layered on top.
- *
- * The identity is a deep indigo primary with a teal secondary: calm, legible at small sizes, and
- * distinct from the blue every system UI already uses.
+ * The onboarding artwork and the native interface share the same pigments: ink teal for depth,
+ * cream for trust, tangerine for action, mint for calm and yellow for learning. Light mode is a
+ * paper rendering of the same system, not a separate visual identity.
  */
+object SignalColors {
+    val Ink = Color(0xFF06171B)
+    val InkRaised = Color(0xFF0D2529)
+    val InkHigh = Color(0xFF143238)
+    val InkBorder = Color(0xFF29474C)
 
-// ── Brand ramp ────────────────────────────────────────────────────────────────
-private val Indigo10 = Color(0xFF12082E)
-private val Indigo20 = Color(0xFF241556)
-private val Indigo30 = Color(0xFF3B2A8C)
-private val Indigo40 = Color(0xFF5B3FE0)
-private val Indigo80 = Color(0xFFC7B6FF)
-private val Indigo90 = Color(0xFFE9E1FF)
+    val Paper = Color(0xFFF5F0E4)
+    val PaperRaised = Color(0xFFFFFCF4)
+    val PaperMuted = Color(0xFFE8EFE9)
+    val PaperBorder = Color(0xFFD4DCD3)
 
-// ── Teal (secondary) ──────────────────────────────────────────────────────────
-private val Teal10 = Color(0xFF00201A)
-private val Teal20 = Color(0xFF00382E)
-private val Teal30 = Color(0xFF005143)
-private val Teal40 = Color(0xFF006C59)
-private val Teal80 = Color(0xFF38E0C0)
-private val Teal90 = Color(0xFF74F8D7)
+    val Cream = Color(0xFFF6EEDC)
+    val CreamMuted = Color(0xFFAFC1BB)
 
-// ── Amber (tertiary) ──────────────────────────────────────────────────────────
-private val Amber10 = Color(0xFF2A1700)
-private val Amber20 = Color(0xFF452B00)
-private val Amber30 = Color(0xFF633F00)
-private val Amber40 = Color(0xFF855400)
-private val Amber80 = Color(0xFFFFB865)
-private val Amber90 = Color(0xFFFFDDB8)
+    val Tangerine = Color(0xFFFF7346)
+    val TangerineDark = Color(0xFFC64A24)
+    val TangerineContainer = Color(0xFFFFE0D4)
 
-// ── Error ─────────────────────────────────────────────────────────────────────
-private val Red10 = Color(0xFF410002)
-private val Red20 = Color(0xFF690005)
-private val Red30 = Color(0xFF93000A)
-private val Red40 = Color(0xFFBA1A1A)
-private val Red80 = Color(0xFFFFB4AB)
-private val Red90 = Color(0xFFFFDAD6)
+    val Mint = Color(0xFF66E0BE)
+    val MintDark = Color(0xFF0E6B59)
+    val MintContainer = Color(0xFFD4F3E8)
 
-// ── Neutrals ──────────────────────────────────────────────────────────────────
-private val Neutral6 = Color(0xFF0D0E13)
-private val Neutral10 = Color(0xFF131318)
-private val Neutral12 = Color(0xFF1B1B21)
-private val Neutral17 = Color(0xFF212127)
-private val Neutral20 = Color(0xFF2A2A31)
-private val Neutral22 = Color(0xFF2F2F36)
-private val Neutral24 = Color(0xFF35353D)
-private val Neutral90 = Color(0xFFE4E1E9)
-private val Neutral92 = Color(0xFFEAE7EF)
-private val Neutral94 = Color(0xFFF0EDF5)
-private val Neutral96 = Color(0xFFF6F2FA)
-private val Neutral98 = Color(0xFFFDF8FF)
-private val Neutral100 = Color(0xFFFFFFFF)
+    val Sun = Color(0xFFF4C95D)
+    val SunDark = Color(0xFF765607)
+    val SunContainer = Color(0xFFFFEAB2)
 
-private val NeutralVariant30 = Color(0xFF46464F)
-private val NeutralVariant50 = Color(0xFF777680)
-private val NeutralVariant60 = Color(0xFF918F9A)
-private val NeutralVariant80 = Color(0xFFC7C5D0)
-private val NeutralVariant90 = Color(0xFFE4E1EC)
+    val Critical = Color(0xFFFF654F)
+    val CriticalDark = Color(0xFFB83224)
+    val Quiet = Color(0xFF78CFAE)
+    val Silent = Color(0xFF819398)
+}
 
-/**
- * Priority colours.
- *
- * Deliberately identical across light and dark. A user learns "amber means it can wait" once;
- * shifting the hue between themes would make them relearn it. Contrast is carried by the
- * container each is drawn on rather than by changing the colour itself.
- */
+/** Priority meaning is stable across light and dark; containers provide the required contrast. */
 object PriorityColors {
-    val critical = Color(0xFFFF5A6E)
-    val high = Color(0xFFFF9F45)
-    val medium = Color(0xFF7C5CFF)
-    val low = Color(0xFF38E0C0)
-    val silent = Color(0xFF8B85AD)
+    val critical = SignalColors.Critical
+    val high = SignalColors.Tangerine
+    val medium = SignalColors.Sun
+    val low = SignalColors.Quiet
+    val silent = SignalColors.Silent
 }
 
 internal val AttentionLightColors = lightColorScheme(
-    primary = Indigo40,
-    onPrimary = Neutral100,
-    primaryContainer = Indigo90,
-    onPrimaryContainer = Indigo10,
-    inversePrimary = Indigo80,
+    primary = SignalColors.MintDark,
+    onPrimary = Color.White,
+    primaryContainer = SignalColors.MintContainer,
+    onPrimaryContainer = Color(0xFF08382F),
+    inversePrimary = SignalColors.Mint,
 
-    secondary = Teal40,
-    onSecondary = Neutral100,
-    secondaryContainer = Teal90,
-    onSecondaryContainer = Teal10,
+    secondary = SignalColors.TangerineDark,
+    onSecondary = Color.White,
+    secondaryContainer = SignalColors.TangerineContainer,
+    onSecondaryContainer = Color(0xFF5C1B0A),
 
-    tertiary = Amber40,
-    onTertiary = Neutral100,
-    tertiaryContainer = Amber90,
-    onTertiaryContainer = Amber10,
+    tertiary = SignalColors.SunDark,
+    onTertiary = Color.White,
+    tertiaryContainer = SignalColors.SunContainer,
+    onTertiaryContainer = Color(0xFF3B2A00),
 
-    error = Red40,
-    onError = Neutral100,
-    errorContainer = Red90,
-    onErrorContainer = Red10,
+    error = SignalColors.CriticalDark,
+    onError = Color.White,
+    errorContainer = Color(0xFFFFDAD5),
+    onErrorContainer = Color(0xFF5A120B),
 
-    background = Color(0xFFF5F1FF),
-    onBackground = Color(0xFF1A1230),
-    surface = Neutral98,
-    onSurface = Neutral10,
-    surfaceVariant = NeutralVariant90,
-    onSurfaceVariant = NeutralVariant30,
+    background = SignalColors.Paper,
+    onBackground = Color(0xFF10262A),
+    surface = SignalColors.PaperRaised,
+    onSurface = Color(0xFF10262A),
+    surfaceVariant = SignalColors.PaperMuted,
+    onSurfaceVariant = Color(0xFF526367),
 
-    // The elevation family the previous scheme omitted entirely.
-    surfaceContainerLowest = Neutral100,
-    surfaceContainerLow = Neutral96,
-    surfaceContainer = Neutral94,
-    surfaceContainerHigh = Neutral92,
-    surfaceContainerHighest = Neutral90,
-    surfaceBright = Neutral98,
-    surfaceDim = Neutral90,
-    surfaceTint = Indigo40,
+    surfaceContainerLowest = Color(0xFFFFFFFF),
+    surfaceContainerLow = SignalColors.PaperRaised,
+    surfaceContainer = Color(0xFFF0EDE4),
+    surfaceContainerHigh = Color(0xFFE9E7DF),
+    surfaceContainerHighest = Color(0xFFE0E5DF),
+    surfaceBright = Color(0xFFFFFFFF),
+    surfaceDim = Color(0xFFE6E1D7),
+    surfaceTint = SignalColors.MintDark,
 
-    outline = NeutralVariant50,
-    outlineVariant = NeutralVariant80,
-    scrim = Color(0xFF000000),
-    inverseSurface = Neutral20,
-    inverseOnSurface = Neutral96,
+    outline = Color(0xFF728184),
+    outlineVariant = SignalColors.PaperBorder,
+    scrim = Color.Black,
+    inverseSurface = SignalColors.Ink,
+    inverseOnSurface = SignalColors.Cream,
 )
 
 internal val AttentionDarkColors = darkColorScheme(
-    primary = Indigo80,
-    onPrimary = Indigo20,
-    primaryContainer = Indigo30,
-    onPrimaryContainer = Indigo90,
-    inversePrimary = Indigo40,
+    primary = SignalColors.Mint,
+    onPrimary = Color(0xFF00382F),
+    primaryContainer = Color(0xFF124B40),
+    onPrimaryContainer = Color(0xFFC9F7E9),
+    inversePrimary = SignalColors.MintDark,
 
-    secondary = Teal80,
-    onSecondary = Teal20,
-    secondaryContainer = Teal30,
-    onSecondaryContainer = Teal90,
+    secondary = SignalColors.Tangerine,
+    onSecondary = Color(0xFF4C1607),
+    secondaryContainer = Color(0xFF5A2717),
+    onSecondaryContainer = Color(0xFFFFDCCE),
 
-    tertiary = Amber80,
-    onTertiary = Amber20,
-    tertiaryContainer = Amber30,
-    onTertiaryContainer = Amber90,
+    tertiary = SignalColors.Sun,
+    onTertiary = Color(0xFF3C2C00),
+    tertiaryContainer = Color(0xFF55420E),
+    onTertiaryContainer = Color(0xFFFFE9A9),
 
-    error = Red80,
-    onError = Red20,
-    errorContainer = Red30,
-    onErrorContainer = Red90,
+    error = Color(0xFFFF8978),
+    onError = Color(0xFF56140B),
+    errorContainer = Color(0xFF70251B),
+    onErrorContainer = Color(0xFFFFDAD5),
 
-    background = Color(0xFF120C30),
-    onBackground = Color(0xFFF4F1FF),
-    surface = Neutral6,
-    onSurface = Neutral90,
-    surfaceVariant = NeutralVariant30,
-    onSurfaceVariant = NeutralVariant80,
+    background = SignalColors.Ink,
+    onBackground = SignalColors.Cream,
+    surface = SignalColors.InkRaised,
+    onSurface = SignalColors.Cream,
+    surfaceVariant = SignalColors.InkHigh,
+    onSurfaceVariant = SignalColors.CreamMuted,
 
-    surfaceContainerLowest = Color(0xFF08090D),
-    surfaceContainerLow = Neutral10,
-    surfaceContainer = Neutral12,
-    surfaceContainerHigh = Neutral17,
-    surfaceContainerHighest = Neutral22,
-    surfaceBright = Neutral24,
-    surfaceDim = Neutral6,
-    surfaceTint = Indigo80,
+    surfaceContainerLowest = Color(0xFF031014),
+    surfaceContainerLow = Color(0xFF091D21),
+    surfaceContainer = SignalColors.InkRaised,
+    surfaceContainerHigh = SignalColors.InkHigh,
+    surfaceContainerHighest = Color(0xFF1A3C42),
+    surfaceBright = Color(0xFF21464C),
+    surfaceDim = SignalColors.Ink,
+    surfaceTint = SignalColors.Mint,
 
-    outline = NeutralVariant60,
-    outlineVariant = NeutralVariant30,
-    scrim = Color(0xFF000000),
-    inverseSurface = Neutral90,
-    inverseOnSurface = Neutral20,
+    outline = Color(0xFF779096),
+    outlineVariant = SignalColors.InkBorder,
+    scrim = Color.Black,
+    inverseSurface = SignalColors.Cream,
+    inverseOnSurface = SignalColors.Ink,
 )

@@ -13,12 +13,15 @@ import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
+import com.attentionos.R
 import com.attentionos.ui.theme.AttentionTheme
 import com.attentionos.ui.theme.Motion
 import com.attentionos.ui.theme.Radius
@@ -115,10 +118,12 @@ private fun ThemeModeOption(
     }
 }
 
+@Composable
+@ReadOnlyComposable
 private fun ThemeMode.label(): String = when (this) {
-    ThemeMode.System -> "System"
-    ThemeMode.Light -> "Light"
-    ThemeMode.Dark -> "Dark"
+    ThemeMode.System -> stringResource(R.string.theme_system)
+    ThemeMode.Light -> stringResource(R.string.theme_light)
+    ThemeMode.Dark -> stringResource(R.string.theme_dark)
 }
 
 @Preview(name = "Theme selector · light")

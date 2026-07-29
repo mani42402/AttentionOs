@@ -7,18 +7,23 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.attentionos.domain.AttentionPriority
+import com.attentionos.R
 import com.attentionos.ui.theme.AttentionTheme
+import com.attentionos.ui.theme.LocalDarkTheme
 import com.attentionos.ui.theme.PriorityColors
 import com.attentionos.ui.theme.Radius
+import com.attentionos.ui.theme.SignalColors
 import com.attentionos.ui.theme.Spacing
 import com.attentionos.ui.theme.ThemeMode
 
@@ -34,19 +39,31 @@ internal fun PriorityChip(
     modifier: Modifier = Modifier,
 ) {
     val accent = priority.accent()
+    val content = if (LocalDarkTheme.current) {
+        accent
+    } else {
+        when (priority) {
+            AttentionPriority.CRITICAL -> SignalColors.CriticalDark
+            AttentionPriority.HIGH -> SignalColors.TangerineDark
+            AttentionPriority.MEDIUM -> SignalColors.SunDark
+            AttentionPriority.LOW -> SignalColors.MintDark
+            AttentionPriority.SILENT -> MaterialTheme.colorScheme.onSurfaceVariant
+        }
+    }
+    val spoken = priority.describe()
     Row(
         modifier = modifier
-            .background(accent.copy(alpha = 0.14f), Radius.pill)
+            .background(content.copy(alpha = 0.12f), Radius.pill)
             .padding(horizontal = Spacing.md, vertical = 5.dp)
-            .semantics { contentDescription = priority.describe() },
+            .semantics { contentDescription = spoken },
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(Spacing.xs + 2.dp),
     ) {
-        StatusDot(color = accent, size = 7.dp)
+        SignalDot(color = content, size = 7.dp)
         Text(
             text = priority.label(),
             style = MaterialTheme.typography.labelSmall,
-            color = accent,
+            color = content,
             modifier = Modifier.clearAndSetSemantics { },
         )
     }
@@ -67,21 +84,25 @@ internal fun accentForPriorityName(name: String): Color =
         .getOrDefault(PriorityColors.silent)
 
 /** Short label shown in the chip. */
+@Composable
+@ReadOnlyComposable
 internal fun AttentionPriority.label(): String = when (this) {
-    AttentionPriority.CRITICAL -> "Urgent"
-    AttentionPriority.HIGH -> "Important"
-    AttentionPriority.MEDIUM -> "Normal"
-    AttentionPriority.LOW -> "Can wait"
-    AttentionPriority.SILENT -> "Quiet"
+    AttentionPriority.CRITICAL -> stringResource(R.string.priority_urgent)
+    AttentionPriority.HIGH -> stringResource(R.string.priority_important)
+    AttentionPriority.MEDIUM -> stringResource(R.string.priority_normal)
+    AttentionPriority.LOW -> stringResource(R.string.priority_can_wait)
+    AttentionPriority.SILENT -> stringResource(R.string.priority_quiet)
 }
 
 /** Full sentence for screen readers, since the chip's own text is abbreviated. */
+@Composable
+@ReadOnlyComposable
 internal fun AttentionPriority.describe(): String = when (this) {
-    AttentionPriority.CRITICAL -> "Urgent. Always reaches you."
-    AttentionPriority.HIGH -> "Important. Reaches you promptly."
-    AttentionPriority.MEDIUM -> "Normal priority."
-    AttentionPriority.LOW -> "Can wait. Delivered quietly."
-    AttentionPriority.SILENT -> "Quiet. No sound or vibration."
+    AttentionPriority.CRITICAL -> stringResource(R.string.priority_urgent_always_reaches_you)
+    AttentionPriority.HIGH -> stringResource(R.string.priority_important_reaches_you_promptly)
+    AttentionPriority.MEDIUM -> stringResource(R.string.priority_normal_priority)
+    AttentionPriority.LOW -> stringResource(R.string.priority_can_wait_delivered_quietly)
+    AttentionPriority.SILENT -> stringResource(R.string.priority_quiet_no_sound_or_vibration)
 }
 
 @Preview(name = "Priority chips · light")

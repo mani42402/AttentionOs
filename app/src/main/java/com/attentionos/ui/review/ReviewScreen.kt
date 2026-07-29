@@ -1,6 +1,7 @@
 package com.attentionos.ui.review
 
 import androidx.activity.compose.BackHandler
+import androidx.annotation.StringRes
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
@@ -8,7 +9,9 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -17,6 +20,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -24,9 +28,14 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -34,20 +43,31 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.AbsoluteAlignment
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.customActions
+import androidx.compose.ui.semantics.progressBarRangeInfo
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
@@ -55,26 +75,39 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.attentionos.data.db.NotificationListItem
 import com.attentionos.domain.AttentionPriority
+import com.attentionos.R
 import com.attentionos.ui.MainUiState
-import com.attentionos.ui.components.AttentionCard
 import com.attentionos.ui.components.CalmMark
 import com.attentionos.ui.components.EmptyState
 import com.attentionos.ui.components.HSpace
+import com.attentionos.ui.components.OnDeviceBadge
 import com.attentionos.ui.components.PriorityChip
+import com.attentionos.ui.components.SignalCard
+import com.attentionos.ui.components.SignalEyebrow
+import com.attentionos.ui.components.FeatureSurfaceMutedColor
+import com.attentionos.ui.components.SignalFeatureSurface
+import com.attentionos.ui.components.SignalScreenHeader
+import com.attentionos.ui.components.SignalSectionHeader
 import com.attentionos.ui.components.VSpace
 import com.attentionos.ui.components.accentForPriorityName
 import com.attentionos.ui.home.NotificationRow
 import com.attentionos.ui.theme.AttentionTheme
+import com.attentionos.ui.theme.LocalDarkTheme
 import com.attentionos.ui.theme.Motion
 import com.attentionos.ui.theme.PriorityColors
 import com.attentionos.ui.theme.Radius
+import com.attentionos.ui.theme.SignalColors
 import com.attentionos.ui.theme.Spacing
 import com.attentionos.ui.theme.ThemeMode
 import com.attentionos.ui.theme.motionEnabled
 import com.attentionos.ui.theme.rememberHaptics
+import kotlin.math.PI
 import kotlin.math.abs
+import kotlin.math.cos
+import kotlin.math.sin
 import kotlin.math.roundToInt
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 /**
  * Review.
@@ -98,24 +131,74 @@ internal fun ActivityScreen(
     var reviewing by rememberSaveable { mutableStateOf(false) }
     var judgedIds by rememberSaveable { mutableStateOf(emptySet<Long>()) }
 
+    // A correction is write-once in the repository: `recordAction` ignores a second explicit
+    // action on the same notification, and it moves sender memory by an exponential average that
+    // has no inverse. So undo cannot mean "reverse it afterwards" — the decision is instead held
+    // here for a few seconds and only then committed. Undo simply drops it.
+    var pending by remember { mutableStateOf<PendingDecision?>(null) }
+    val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
+    val commit: (PendingDecision) -> Unit = { decision ->
+        onFeedback(decision.event.notificationKey, decision.important)
+    }
+
     LaunchedEffect(reviewRequest) {
         if (reviewRequest > 0) reviewing = true
     }
 
     val queue = state.unreviewedEvents.filterNot { it.id in judgedIds }
 
-    BackHandler(enabled = reviewing) { reviewing = false }
+    // Leaving by any route commits, including process death mid-session.
+    val pendingRef by rememberUpdatedState(pending)
+    DisposableEffect(Unit) {
+        onDispose { pendingRef?.let(commit) }
+    }
+
+    BackHandler(enabled = reviewing) {
+        pending?.let(commit)
+        pending = null
+        reviewing = false
+    }
 
     if (reviewing) {
+        val undoLabel = stringResource(R.string.review_undo)
+        val savedImportant = stringResource(R.string.review_saved_important)
+        val savedCanWait = stringResource(R.string.review_saved_can_wait)
         ReviewSession(
             event = queue.firstOrNull(),
             judged = judgedIds.size,
+            remaining = queue.size,
+            snackbarHostState = snackbarHostState,
             onDecide = { event, important ->
+                // Any decision still waiting is settled before the next one starts, so at most
+                // one correction is ever uncommitted.
+                pending?.let(commit)
                 judgedIds = judgedIds + event.id
-                onFeedback(event.notificationKey, important)
+                val decision = PendingDecision(event, important)
+                pending = decision
+                scope.launch {
+                    val result = snackbarHostState.showSnackbar(
+                        message = if (important) savedImportant else savedCanWait,
+                        actionLabel = undoLabel,
+                        withDismissAction = true,
+                        duration = SnackbarDuration.Short,
+                    )
+                    if (pending !== decision) return@launch
+                    pending = null
+                    if (result == SnackbarResult.ActionPerformed) {
+                        judgedIds = judgedIds - event.id
+                    } else {
+                        commit(decision)
+                    }
+                }
             },
             onSkip = { event -> judgedIds = judgedIds + event.id },
-            onClose = { reviewing = false },
+            onClose = {
+                // Leaving is consent: flush rather than silently discard the correction.
+                pending?.let(commit)
+                pending = null
+                reviewing = false
+            },
         )
         return
     }
@@ -139,49 +222,31 @@ internal fun ActivityScreen(
         verticalArrangement = Arrangement.spacedBy(Spacing.md),
     ) {
         item {
-            Column(Modifier.statusBarsPadding()) {
-                VSpace(Spacing.lg)
-                Text("Review", style = MaterialTheme.typography.headlineMedium)
-                VSpace(Spacing.xs)
-                Text(
-                    "See how notifications were handled, and correct anything that feels wrong.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
+            SignalScreenHeader(
+                title = stringResource(R.string.review_review),
+                subtitle = stringResource(R.string.review_see_every_decision_and_teach_your_local),
+                modifier = Modifier
+                    .statusBarsPadding()
+                    .padding(top = Spacing.lg),
+                trailing = { OnDeviceBadge() },
+            )
         }
 
         if (queue.isNotEmpty()) {
             item {
-                AttentionCard(tone = MaterialTheme.colorScheme.primaryContainer) {
-                    Text(
-                        "Quick review",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer,
-                    )
-                    VSpace(Spacing.xs)
-                    Text(
-                        text = if (queue.size == 1) {
-                            "1 decision is ready for your feedback."
-                        } else {
-                            "${queue.size} decisions are ready for your feedback."
-                        },
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.85f),
-                    )
-                    VSpace(Spacing.md)
-                    Button(onClick = { reviewing = true }) { Text("Start") }
-                }
+                QuickReviewPanel(queue.size) { reviewing = true }
             }
         }
 
         item {
+            SignalSectionHeader(stringResource(R.string.review_decision_history))
+            VSpace(Spacing.md)
             Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                 ActivityFilter.entries.forEach { option ->
                     FilterChip(
                         selected = filter == option,
                         onClick = { filter = option },
-                        label = { Text(option.label) },
+                        label = { Text(stringResource(option.label)) },
                         modifier = Modifier.semantics { role = Role.RadioButton },
                     )
                 }
@@ -191,8 +256,8 @@ internal fun ActivityScreen(
         if (visible.isEmpty()) {
             item {
                 EmptyState(
-                    title = "Nothing here yet",
-                    description = "Decisions appear as notifications arrive on your device.",
+                    title = stringResource(R.string.review_nothing_here_yet),
+                    description = stringResource(R.string.review_decisions_appear_as_notifications_arrive_on_your),
                 )
             }
         } else {
@@ -201,10 +266,41 @@ internal fun ActivityScreen(
     }
 }
 
-internal enum class ActivityFilter(val label: String) {
-    ALL("All"),
-    IMPORTANT("Important"),
-    QUIET("Quiet"),
+@Composable
+private fun QuickReviewPanel(count: Int, onStart: () -> Unit) {
+    SignalFeatureSurface {
+        Column {
+            SignalEyebrow(stringResource(R.string.review_learning_queue), color = SignalColors.Mint)
+            VSpace(Spacing.sm)
+            Row(verticalAlignment = Alignment.Bottom) {
+                Text(
+                    count.toString(),
+                    style = MaterialTheme.typography.displayMedium,
+                )
+                HSpace(Spacing.sm)
+                Text(
+                    if (count == 1) stringResource(R.string.review_decision_ready) else stringResource(R.string.review_decisions_ready),
+                    style = MaterialTheme.typography.titleMedium,
+                    color = FeatureSurfaceMutedColor,
+                    modifier = Modifier.padding(bottom = Spacing.sm),
+                )
+            }
+            VSpace(Spacing.xs)
+            Text(
+                stringResource(R.string.review_a_short_review_gives_the_personal_model),
+                style = MaterialTheme.typography.bodyMedium,
+                color = FeatureSurfaceMutedColor,
+            )
+            VSpace(Spacing.lg)
+            Button(onClick = onStart) { Text(stringResource(R.string.review_start_quick_review)) }
+        }
+    }
+}
+
+internal enum class ActivityFilter(@StringRes val label: Int) {
+    ALL(R.string.review_all),
+    IMPORTANT(R.string.review_important),
+    QUIET(R.string.review_quiet),
 }
 
 /** Full-screen judging session. */
@@ -212,6 +308,8 @@ internal enum class ActivityFilter(val label: String) {
 private fun ReviewSession(
     event: NotificationListItem?,
     judged: Int,
+    remaining: Int,
+    snackbarHostState: SnackbarHostState,
     onDecide: (NotificationListItem, Boolean) -> Unit,
     onSkip: (NotificationListItem) -> Unit,
     onClose: () -> Unit,
@@ -231,15 +329,19 @@ private fun ReviewSession(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Column(Modifier.weight(1f)) {
-                    Text("Teach what matters", style = MaterialTheme.typography.titleMedium)
+                    SignalEyebrow(stringResource(R.string.review_review_session))
+                    VSpace(Spacing.xs)
+                    Text(stringResource(R.string.review_teach_what_matters), style = MaterialTheme.typography.headlineSmall)
                     Text(
-                        "$judged reviewed",
+                        stringResource(R.string.review_reviewed_remaining, judged, remaining),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
-                TextButton(onClick = onClose) { Text("Done") }
+                TextButton(onClick = onClose) { Text(stringResource(R.string.review_done)) }
             }
+            ReviewProgress(judged = judged, remaining = remaining)
+            VSpace(Spacing.md)
 
             Box(
                 modifier = Modifier
@@ -271,6 +373,54 @@ private fun ReviewSession(
                 )
             }
         }
+        SnackbarHost(
+            hostState = snackbarHostState,
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .navigationBarsPadding()
+                .padding(Spacing.md),
+        )
+    }
+}
+
+/** A correction that has been made but not yet written, so that undo has something to cancel. */
+private data class PendingDecision(
+    val event: NotificationListItem,
+    val important: Boolean,
+)
+
+@Composable
+private fun ReviewProgress(judged: Int, remaining: Int) {
+    val total = (judged + remaining).coerceAtLeast(1)
+    val enabled = motionEnabled()
+    val progress by animateFloatAsState(
+        targetValue = judged.toFloat() / total,
+        animationSpec = Motion.gentle(enabled),
+        label = "review-progress",
+    )
+    val spoken = stringResource(R.string.review_progress_description, judged, total)
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(4.dp)
+            .clip(Radius.pill)
+            .background(MaterialTheme.colorScheme.outlineVariant)
+            // Without this a screen reader hears nothing at all: the bar is drawn, not a widget.
+            .semantics {
+                contentDescription = spoken
+                progressBarRangeInfo = ProgressBarRangeInfo(
+                    current = judged.toFloat(),
+                    range = 0f..total.toFloat(),
+                    steps = (total - 1).coerceAtLeast(0),
+                )
+            },
+    ) {
+        Box(
+            Modifier
+                .fillMaxWidth(progress.coerceIn(0f, 1f))
+                .height(4.dp)
+                .background(MaterialTheme.colorScheme.primary, Radius.pill),
+        )
     }
 }
 
@@ -291,7 +441,7 @@ private fun SwipeableDecisionCard(
     val density = LocalDensity.current
     val commitPx = with(density) { COMMIT_THRESHOLD.toPx() }
 
-    var offset by remember(event.id) { mutableStateOf(0f) }
+    var offset by remember(event.id) { mutableFloatStateOf(0f) }
     var crossedThreshold by remember(event.id) { mutableStateOf(false) }
 
     val animatedOffset by animateFloatAsState(
@@ -305,6 +455,13 @@ private fun SwipeableDecisionCard(
         progress < -0.05f -> PriorityColors.low.copy(alpha = 0.16f * -progress)
         else -> Color.Transparent
     }
+    val cardFill = MaterialTheme.colorScheme.inverseSurface
+    val cardContent = MaterialTheme.colorScheme.inverseOnSurface
+    val personalAccent = if (LocalDarkTheme.current) SignalColors.MintDark else SignalColors.Mint
+    val spoken = stringResource(R.string.review_notification_from, event.appLabel) +
+        stringResource(R.string.review_swipe_right_if_important_left_if_it)
+    val markImportant = stringResource(R.string.review_mark_important)
+    val markCanWait = stringResource(R.string.review_mark_can_wait)
 
     Box(
         modifier = Modifier
@@ -339,88 +496,134 @@ private fun SwipeableDecisionCard(
             // Swiping cannot be the only route: these give screen-reader users the same two
             // choices through an explicit action list.
             .semantics {
-                contentDescription = "Notification from ${event.appLabel}. " +
-                    "Swipe right if important, left if it can wait."
+                contentDescription = spoken
                 customActions = listOf(
-                    CustomAccessibilityAction("Mark important") { onDecide(true); true },
-                    CustomAccessibilityAction("Mark can wait") { onDecide(false); true },
+                    CustomAccessibilityAction(markImportant) { onDecide(true); true },
+                    CustomAccessibilityAction(markCanWait) { onDecide(false); true },
                 )
             },
     ) {
-        AttentionCard(tone = MaterialTheme.colorScheme.surfaceContainerLow) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(
-                    modifier = Modifier
-                        .size(Spacing.huge)
-                        .background(
-                            accentForPriorityName(event.priority).copy(alpha = 0.14f),
-                            Radius.card,
-                        ),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text(
-                        event.appLabel.take(1).uppercase(),
-                        style = MaterialTheme.typography.titleMedium,
-                        color = accentForPriorityName(event.priority),
-                    )
+        Box(
+            Modifier
+                .matchParentSize()
+                .graphicsLayer {
+                    scaleX = 0.94f
+                    scaleY = 0.96f
+                    translationY = -18.dp.toPx()
+                    alpha = 0.34f
                 }
-                HSpace(Spacing.md)
-                Column(Modifier.weight(1f)) {
-                    Text(event.appLabel, style = MaterialTheme.typography.titleSmall)
-                    Text(
-                        "Handled as",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
+                .background(cardFill, Radius.card),
+        )
+        Box(
+            Modifier
+                .matchParentSize()
+                .graphicsLayer {
+                    scaleX = 0.97f
+                    scaleY = 0.98f
+                    translationY = -9.dp.toPx()
+                    alpha = 0.58f
                 }
-                runCatching { AttentionPriority.valueOf(event.priority) }
-                    .getOrNull()
-                    ?.let { PriorityChip(it) }
-            }
+                .background(cardFill, Radius.card),
+        )
+        Surface(
+            shape = Radius.card,
+            color = cardFill,
+            contentColor = cardContent,
+            border = androidx.compose.foundation.BorderStroke(
+                1.dp,
+                cardContent.copy(alpha = 0.14f),
+            ),
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Column(Modifier.padding(Spacing.xl)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier
+                            .size(Spacing.huge)
+                            .background(
+                                accentForPriorityName(event.priority).copy(alpha = 0.16f),
+                                Radius.card,
+                            ),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(
+                            event.appLabel.take(1).uppercase(),
+                            style = MaterialTheme.typography.titleMedium,
+                            color = accentForPriorityName(event.priority),
+                        )
+                    }
+                    HSpace(Spacing.md)
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            event.appLabel,
+                            style = MaterialTheme.typography.titleSmall,
+                            color = cardContent,
+                        )
+                        Text(
+                            stringResource(R.string.review_handled_as),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = cardContent.copy(alpha = 0.62f),
+                        )
+                    }
+                    runCatching { AttentionPriority.valueOf(event.priority) }
+                        .getOrNull()
+                        ?.let { PriorityChip(it) }
+                }
 
-            VSpace(Spacing.lg)
-            Text(
-                text = event.title ?: "This notification",
-                style = MaterialTheme.typography.headlineSmall,
-                maxLines = 3,
-                overflow = TextOverflow.Ellipsis,
-            )
-            event.message?.let { body ->
-                VSpace(Spacing.sm)
+                VSpace(Spacing.lg)
                 Text(
-                    body,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 4,
+                    text = event.title ?: stringResource(R.string.review_this_notification),
+                    style = MaterialTheme.typography.headlineSmall,
+                    color = cardContent,
+                    maxLines = 3,
                     overflow = TextOverflow.Ellipsis,
                 )
-            }
-
-            VSpace(Spacing.lg)
-            Surface(
-                shape = Radius.card,
-                color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Column(Modifier.padding(Spacing.md)) {
+                event.message?.let { body ->
+                    VSpace(Spacing.sm)
                     Text(
-                        "WHY",
+                        body,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = cardContent.copy(alpha = 0.72f),
+                        maxLines = 4,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+
+                VSpace(Spacing.lg)
+                Column(
+                    Modifier
+                        .fillMaxWidth()
+                        .clip(MaterialTheme.shapes.large)
+                        .background(cardContent.copy(alpha = 0.07f))
+                        .border(
+                            1.dp,
+                            cardContent.copy(alpha = 0.10f),
+                            MaterialTheme.shapes.large,
+                        )
+                        .padding(Spacing.md),
+                ) {
+                    Text(
+                        stringResource(R.string.review_why_this_rank),
                         style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = cardContent.copy(alpha = 0.58f),
                     )
                     VSpace(Spacing.xs)
-                    Text(event.explanation, style = MaterialTheme.typography.bodyMedium)
+                    Text(
+                        event.explanation,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = cardContent,
+                    )
                     event.personalProbability?.let { probability ->
                         VSpace(Spacing.sm)
                         Text(
                             text = if (event.personalModelApplied) {
-                                "Your preferences applied · " +
-                                    "${(probability * 100).roundToInt()}% important"
+                                stringResource(R.string.review_your_preferences_applied) +
+                                    stringResource(R.string.review_important_2, (probability * 100).roundToInt())
                             } else {
-                                "Personal estimate · ${(probability * 100).roundToInt()}% important"
+                                stringResource(R.string.review_personal_estimate_important, (probability * 100).roundToInt())
                             },
                             style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.primary,
+                            color = personalAccent,
                         )
                     }
                 }
@@ -438,10 +641,17 @@ private fun SwipeableDecisionCard(
                 Modifier
                     .matchParentSize()
                     .padding(Spacing.xl),
-                contentAlignment = if (progress > 0) Alignment.CenterStart else Alignment.CenterEnd,
+                // Physical, not layout-relative: the label marks the edge the card has uncovered,
+                // and `translationX` is a physical offset. Start/End would put it under the card
+                // in RTL.
+                contentAlignment = if (progress > 0) {
+                    AbsoluteAlignment.CenterLeft
+                } else {
+                    AbsoluteAlignment.CenterRight
+                },
             ) {
                 Text(
-                    text = if (progress > 0) "IMPORTANT" else "CAN WAIT",
+                    text = if (progress > 0) stringResource(R.string.review_important_3) else stringResource(R.string.review_can_wait),
                     style = MaterialTheme.typography.titleMedium,
                     color = if (progress > 0) PriorityColors.high else PriorityColors.low,
                     modifier = Modifier.alpha(abs(progress)),
@@ -465,21 +675,29 @@ private fun DecisionButtons(
                     haptics.confirm()
                     onCanWait()
                 },
-                modifier = Modifier.weight(1f),
+                modifier = Modifier
+                    .weight(1f)
+                    .height(54.dp),
             ) {
-                Text("Can wait")
+                Text(stringResource(R.string.review_can_wait_2))
             }
             Button(
                 onClick = {
                     haptics.confirm()
                     onImportant()
                 },
-                modifier = Modifier.weight(1f),
+                modifier = Modifier
+                    .weight(1f)
+                    .height(54.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.secondary,
+                    contentColor = MaterialTheme.colorScheme.onSecondary,
+                ),
             ) {
-                Text("This matters")
+                Text(stringResource(R.string.review_important))
             }
         }
-        TextButton(onClick = onSkip, modifier = Modifier.fillMaxWidth()) { Text("Skip") }
+        TextButton(onClick = onSkip, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.review_skip_for_now)) }
     }
 }
 
@@ -494,29 +712,89 @@ private fun SessionComplete(judged: Int, onClose: () -> Unit) {
     }
 
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        AnimatedVisibility(
-            visible = shown,
-            enter = fadeIn() +
-                scaleIn(initialScale = 0.6f, animationSpec = Motion.playful(enabled)),
-        ) {
-            CalmMark()
+        Box(contentAlignment = Alignment.Center) {
+            // Only a real session earns the burst; arriving at an already-empty queue does not.
+            if (judged > 0) CelebrationBurst(play = shown)
+            this@Column.AnimatedVisibility(
+                visible = shown,
+                enter = fadeIn() +
+                    scaleIn(initialScale = 0.6f, animationSpec = Motion.playful(enabled)),
+            ) {
+                CalmMark()
+            }
         }
         VSpace(Spacing.xl)
-        Text("All caught up", style = MaterialTheme.typography.headlineSmall)
+        Text(stringResource(R.string.review_all_caught_up), style = MaterialTheme.typography.headlineSmall)
         VSpace(Spacing.sm)
         Text(
             text = when (judged) {
-                0 -> "Nothing waiting for review right now."
-                1 -> "One correction saved. Your helper just got a little sharper."
-                else -> "$judged corrections saved. Your helper just got a little sharper."
+                0 -> stringResource(R.string.review_nothing_waiting_for_review_right_now)
+                1 -> stringResource(R.string.review_one_correction_saved_your_helper_just_got)
+                else -> stringResource(R.string.review_corrections_saved_your_helper_just_got_a, judged)
             },
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         VSpace(Spacing.xl)
-        Button(onClick = onClose) { Text("Done") }
+        Button(onClick = onClose) { Text(stringResource(R.string.review_done)) }
     }
 }
+
+/**
+ * The one celebratory moment in the app, drawn rather than shipped as an animation asset.
+ *
+ * Rays and seeds radiate once and settle — the reward for finishing a review, not an ambient
+ * loop. It collapses to nothing when Reduced Motion is on, because a burst is exactly the kind
+ * of movement that setting exists to stop.
+ */
+@Composable
+private fun CelebrationBurst(play: Boolean) {
+    val enabled = motionEnabled()
+    if (!enabled) return
+
+    val progress by animateFloatAsState(
+        targetValue = if (play) 1f else 0f,
+        animationSpec = Motion.timed(enabled, Motion.SLOW),
+        label = "celebration",
+    )
+    val tangerine = SignalColors.Tangerine
+    val mint = SignalColors.Mint
+    val sun = SignalColors.Sun
+
+    Canvas(Modifier.size(200.dp)) {
+        if (progress <= 0f) return@Canvas
+        val center = Offset(size.width / 2f, size.height / 2f)
+        val maxRadius = size.minDimension / 2f
+        // Fade out over the back half so the burst resolves instead of freezing mid-flight.
+        val fade = (1f - progress).coerceIn(0f, 1f).let { if (progress < 0.5f) 1f else it * 2f }
+
+        repeat(RAY_COUNT) { index ->
+            val angle = (index.toFloat() / RAY_COUNT) * 2f * PI.toFloat()
+            val colour = when (index % 3) {
+                0 -> tangerine
+                1 -> mint
+                else -> sun
+            }
+            val inner = maxRadius * (0.34f + progress * 0.30f)
+            val outer = inner + maxRadius * 0.14f * progress
+            val direction = Offset(cos(angle), sin(angle))
+            drawLine(
+                color = colour.copy(alpha = 0.75f * fade),
+                start = center + direction * inner,
+                end = center + direction * outer,
+                strokeWidth = 3.dp.toPx(),
+                cap = StrokeCap.Round,
+            )
+            drawCircle(
+                color = colour.copy(alpha = 0.55f * fade),
+                radius = 2.5.dp.toPx(),
+                center = center + direction * (outer + maxRadius * 0.10f * progress),
+            )
+        }
+    }
+}
+
+private const val RAY_COUNT = 12
 
 private val COMMIT_THRESHOLD = 110.dp
 

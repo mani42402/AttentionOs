@@ -21,13 +21,14 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
 import com.attentionos.ui.theme.AttentionTheme
 import com.attentionos.ui.theme.Elevation
 import com.attentionos.ui.theme.Motion
@@ -37,115 +38,14 @@ import com.attentionos.ui.theme.ThemeMode
 import com.attentionos.ui.theme.motionEnabled
 
 /**
- * The app's standard content container.
+ * Loading placeholder.
  *
- * Delegates to [GlassCard] so that every screen picks up the glass treatment from one place.
- * The `tone` parameter is kept because several screens use it to mean "this card is
- * emphasised"; a tinted card now renders as tinted glass rather than an opaque panel, which is
- * what keeps the aurora visible through the whole app.
- */
-@Composable
-internal fun AttentionCard(
-    modifier: Modifier = Modifier,
-    tone: Color = Color.Unspecified,
-    shape: Shape = Radius.card,
-    contentPadding: androidx.compose.foundation.layout.PaddingValues =
-        androidx.compose.foundation.layout.PaddingValues(Spacing.xl),
-    content: @Composable ColumnScope.() -> Unit,
-) {
-    if (tone == Color.Unspecified) {
-        GlassCard(
-            modifier = modifier,
-            shape = shape,
-            contentPadding = contentPadding,
-            content = content,
-        )
-    } else {
-        // An emphasised card: the tint sits over glass rather than replacing it.
-        Box(modifier = modifier) {
-            GlassCard(shape = shape, contentPadding = contentPadding) {
-                content()
-            }
-            Box(
-                Modifier
-                    .matchParentSize()
-                    .clip(shape)
-                    .background(tone.copy(alpha = 0.18f)),
-            )
-        }
-    }
-}
-
-/**
- * Section heading.
- *
- * Marked as a heading for screen readers, which no header in the old UI was — so there was no
- * way to navigate the app by structure.
- */
-@Composable
-internal fun SectionHeading(
-    text: String,
-    modifier: Modifier = Modifier,
-    trailing: @Composable (() -> Unit)? = null,
-) {
-    Row(
-        modifier = modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween,
-    ) {
-        Text(
-            text = text,
-            style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.semantics { heading() },
-        )
-        trailing?.invoke()
-    }
-}
-
-/** Small uppercase label that introduces a group. */
-@Composable
-internal fun GroupLabel(text: String, modifier: Modifier = Modifier) {
-    Text(
-        text = text.uppercase(),
-        style = MaterialTheme.typography.labelMedium,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = modifier
-            .padding(horizontal = Spacing.xs, vertical = Spacing.sm)
-            .semantics { heading() },
-    )
-}
-
-/**
- * A coloured status dot.
- *
- * Hidden from accessibility: it never carries meaning on its own, always sitting beside text
- * that says the same thing. Announcing it would just add noise.
- */
-@Composable
-internal fun StatusDot(
-    color: Color,
-    modifier: Modifier = Modifier,
-    size: androidx.compose.ui.unit.Dp = Spacing.sm,
-) {
-    Box(
-        modifier = modifier
-            .clearAndSetSemantics { }
-            .size(size)
-            .background(color, RoundedCornerShape(percent = 50)),
-    )
-}
-
-/**
- * Placeholder block for content that has not loaded.
- *
- * The old app rendered literally nothing while loading — a blank Surface on cold start — so the
- * first thing a user saw was an empty screen with no indication anything was happening.
+ * A shape where content will land beats a spinner: the layout does not jump when data arrives.
  */
 @Composable
 internal fun SkeletonBlock(
     modifier: Modifier = Modifier,
-    height: androidx.compose.ui.unit.Dp = Spacing.huge,
+    height: Dp = Spacing.huge,
     shape: Shape = Radius.card,
 ) {
     val enabled = motionEnabled()
@@ -165,13 +65,13 @@ internal fun SkeletonBlock(
 
 /** Vertical spacer on the spacing scale. */
 @Composable
-internal fun VSpace(height: androidx.compose.ui.unit.Dp) {
+internal fun VSpace(height: Dp) {
     Spacer(Modifier.height(height))
 }
 
 /** Horizontal spacer on the spacing scale. */
 @Composable
-internal fun HSpace(width: androidx.compose.ui.unit.Dp) {
+internal fun HSpace(width: Dp) {
     Spacer(Modifier.width(width))
 }
 
@@ -181,12 +81,9 @@ private fun SurfacesPreview() {
     AttentionTheme(themeMode = ThemeMode.Light) {
         Surface(color = MaterialTheme.colorScheme.background) {
             Column(Modifier.padding(Spacing.lg)) {
-                GroupLabel("Today")
-                AttentionCard {
-                    SectionHeading("Recent notifications")
-                    VSpace(Spacing.md)
-                    SkeletonBlock()
-                }
+                SkeletonBlock()
+                VSpace(Spacing.md)
+                SkeletonBlock(height = 48.dp)
             }
         }
     }
@@ -198,12 +95,9 @@ private fun SurfacesDarkPreview() {
     AttentionTheme(themeMode = ThemeMode.Dark) {
         Surface(color = MaterialTheme.colorScheme.background) {
             Column(Modifier.padding(Spacing.lg)) {
-                GroupLabel("Today")
-                AttentionCard {
-                    SectionHeading("Recent notifications")
-                    VSpace(Spacing.md)
-                    SkeletonBlock()
-                }
+                SkeletonBlock()
+                VSpace(Spacing.md)
+                SkeletonBlock(height = 48.dp)
             }
         }
     }

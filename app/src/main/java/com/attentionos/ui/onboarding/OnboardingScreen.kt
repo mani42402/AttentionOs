@@ -1,17 +1,19 @@
 package com.attentionos.ui.onboarding
 
+import android.app.Activity
 import androidx.activity.compose.BackHandler
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn
-import androidx.compose.animation.shrinkVertically
+import androidx.annotation.DrawableRes
+import androidx.annotation.StringRes
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -27,56 +29,76 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Surface
+import androidx.compose.material3.SheetValue
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.toggleableState
+import androidx.compose.ui.state.ToggleableState
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.core.view.WindowCompat
+import com.attentionos.R
 import com.attentionos.ui.MainUiState
-import com.attentionos.ui.components.AttentionCard
+import com.attentionos.ui.components.AttentionBrand
 import com.attentionos.ui.components.HSpace
-import com.attentionos.ui.components.StatusDot
+import com.attentionos.ui.components.SignalDot
 import com.attentionos.ui.components.VSpace
+import com.attentionos.ui.components.rememberNotificationAccess
 import com.attentionos.ui.theme.AttentionTheme
-import com.attentionos.ui.theme.Motion
-import com.attentionos.ui.theme.PriorityColors
+import com.attentionos.ui.theme.LocalDarkTheme
 import com.attentionos.ui.theme.Radius
+import com.attentionos.ui.theme.SignalColors
 import com.attentionos.ui.theme.Spacing
 import com.attentionos.ui.theme.ThemeMode
 import com.attentionos.ui.theme.motionEnabled
 import com.attentionos.ui.theme.rememberHaptics
+import kotlin.math.PI
+import kotlin.math.absoluteValue
+import kotlin.math.sin
 import kotlinx.coroutines.launch
 
 /**
- * Onboarding.
+ * Three-page Signal Garden onboarding.
  *
- * Rebuilt as a swipeable pager. The previous flow was button-only with no gesture support, no
- * back handling — system back exited the app rather than stepping back — and, most oddly, a
- * mandatory five-scenario diagnostic before setup could be completed. That test now lives in
- * Insights, where it answers "show me it works" for someone who is curious rather than blocking
- * someone who is trying to start.
- *
- * Every page can be skipped. Nothing here collects information the app cannot infer or ask for
- * later, so forcing a linear path would only cost patience.
+ * The feature set is unchanged: notification access and the complete interruption-preference
+ * controls remain available. They are folded into the privacy and learning pages so the product
+ * story is three focused chapters rather than five disconnected forms.
  */
 @Composable
 internal fun OnboardingScreen(
@@ -87,91 +109,48 @@ internal fun OnboardingScreen(
     onHighSoundChanged: (Boolean) -> Unit,
     onHighVibrationChanged: (Boolean) -> Unit,
     onReminderChanged: (Boolean) -> Unit,
-    onRunTestLab: () -> Unit,
+    @Suppress("UNUSED_PARAMETER") onRunTestLab: () -> Unit,
     onComplete: () -> Unit,
     onOpenNotificationAccess: () -> Unit,
     onRequestNotificationPermission: () -> Unit,
 ) {
+    ForceDarkSystemBars()
     val pages = OnboardingPage.entries
     val pagerState = rememberPagerState(pageCount = { pages.size })
     val scope = rememberCoroutineScope()
     val haptics = rememberHaptics()
-    val enabled = motionEnabled()
+    val hasAccess = rememberNotificationAccess()
+    var showPreferences by remember { mutableStateOf(false) }
 
-    // Back steps through pages instead of leaving the app, which is what it did before.
     BackHandler(enabled = pagerState.currentPage > 0) {
         scope.launch { pagerState.animateScrollToPage(pagerState.currentPage - 1) }
     }
 
-    Box {
-        Column(
-            Modifier
-                .fillMaxSize()
-                .statusBarsPadding()
-                .navigationBarsPadding(),
-        ) {
-            OnboardingHeader(
-                page = pagerState.currentPage,
-                total = pages.size,
-                onSkip = {
+    Box(
+        Modifier
+            .fillMaxSize()
+            .background(SignalColors.Ink),
+    ) {
+        HorizontalPager(
+            state = pagerState,
+            modifier = Modifier.fillMaxSize(),
+        ) { index ->
+            val pageOffset = (
+                (pagerState.currentPage - index) + pagerState.currentPageOffsetFraction
+                ).absoluteValue.coerceIn(0f, 1f)
+            OnboardingPageFrame(
+                page = pages[index],
+                pageOffset = pageOffset,
+                hasAccess = hasAccess,
+                onConnectAccess = {
                     haptics.select()
-                    onComplete()
+                    onOpenNotificationAccess()
+                    onRequestNotificationPermission()
                 },
-            )
-
-            HorizontalPager(
-                state = pagerState,
-                modifier = Modifier.weight(1f),
-            ) { index ->
-                Column(
-                    Modifier
-                        .fillMaxSize()
-                        .verticalScroll(rememberScrollState())
-                        .padding(horizontal = Spacing.screenHorizontal),
-                    // Pages are short; centring keeps them from stranding content at the top
-                    // with a large void beneath.
-                    verticalArrangement = Arrangement.Center,
-                ) {
-                    when (pages[index]) {
-                        OnboardingPage.Welcome -> WelcomePage()
-                        OnboardingPage.Promise -> PromisePage()
-                        OnboardingPage.Access -> AccessPage(
-                            connected = state.settings.onboardingComplete,
-                            onOpenAccess = onOpenNotificationAccess,
-                            onRequestPermission = onRequestNotificationPermission,
-                        )
-                        OnboardingPage.Preferences -> PreferencesPage(
-                            state = state,
-                            onFocusChanged = onFocusChanged,
-                            onCriticalSoundChanged = onCriticalSoundChanged,
-                            onCriticalVibrationChanged = onCriticalVibrationChanged,
-                            onHighSoundChanged = onHighSoundChanged,
-                            onHighVibrationChanged = onHighVibrationChanged,
-                            onReminderChanged = onReminderChanged,
-                        )
-                        OnboardingPage.Ready -> ReadyPage()
-                    }
-                    VSpace(Spacing.xxxl)
-                }
-            }
-
-            PageIndicator(
-                current = pagerState.currentPage,
-                total = pages.size,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = Spacing.md),
-            )
-
-            OnboardingActions(
-                isFirst = pagerState.currentPage == 0,
-                isLast = pagerState.currentPage == pages.lastIndex,
-                onBack = {
-                    scope.launch { pagerState.animateScrollToPage(pagerState.currentPage - 1) }
-                },
+                onEditPreferences = { showPreferences = true },
                 onNext = {
                     haptics.select()
-                    scope.launch { pagerState.animateScrollToPage(pagerState.currentPage + 1) }
+                    scope.launch { pagerState.animateScrollToPage(index + 1) }
                 },
                 onFinish = {
                     haptics.celebrate()
@@ -179,72 +158,274 @@ internal fun OnboardingScreen(
                 },
             )
         }
+
+        OnboardingTopBar(
+            canSkip = pagerState.currentPage < pages.lastIndex,
+            onSkip = onComplete,
+        )
+    }
+
+    if (showPreferences) {
+        PreferencesSheet(
+            state = state,
+            onDismiss = { showPreferences = false },
+            onFocusChanged = onFocusChanged,
+            onCriticalSoundChanged = onCriticalSoundChanged,
+            onCriticalVibrationChanged = onCriticalVibrationChanged,
+            onHighSoundChanged = onHighSoundChanged,
+            onHighVibrationChanged = onHighVibrationChanged,
+            onReminderChanged = onReminderChanged,
+        )
     }
 }
 
-private enum class OnboardingPage { Welcome, Promise, Access, Preferences, Ready }
+private enum class OnboardingPage(
+    @DrawableRes val image: Int,
+    @StringRes val eyebrow: Int,
+    @StringRes val title: Int,
+    @StringRes val body: Int,
+    val accent: Color,
+) {
+    Sort(
+        image = R.drawable.onboarding_sorting,
+        eyebrow = R.string.onboarding_smart_prioritization,
+        title = R.string.onboarding_know_what_matters,
+        body = R.string.onboarding_local_ai_sorts_every_notification_into_urgent,
+        accent = SignalColors.Tangerine,
+    ),
+    Private(
+        image = R.drawable.onboarding_private,
+        eyebrow = R.string.onboarding_private_by_design,
+        title = R.string.onboarding_your_data_stays_yours,
+        body = R.string.onboarding_messages_choices_and_learning_stay_encrypted_on,
+        accent = SignalColors.Mint,
+    ),
+    Learn(
+        image = R.drawable.onboarding_learning,
+        eyebrow = R.string.onboarding_learns_with_you,
+        title = R.string.onboarding_made_personal_safely,
+        body = R.string.onboarding_correct_a_few_decisions_and_attentionos_adapts,
+        accent = SignalColors.Tangerine,
+    ),
+}
 
 @Composable
-private fun OnboardingHeader(page: Int, total: Int, onSkip: () -> Unit) {
+private fun OnboardingPageFrame(
+    page: OnboardingPage,
+    pageOffset: Float,
+    hasAccess: Boolean,
+    onConnectAccess: () -> Unit,
+    onEditPreferences: () -> Unit,
+    onNext: () -> Unit,
+    onFinish: () -> Unit,
+) {
+    val enabled = motionEnabled()
+    val transition = rememberInfiniteTransition(label = "onboarding-${page.name}")
+    val visualOffset = if (enabled) pageOffset else 0f
+    val drift by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = if (enabled) 1f else 0f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(8_000, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse,
+        ),
+        label = "art-drift",
+    )
+
+    Box(Modifier.fillMaxSize()) {
+        Image(
+            painter = painterResource(page.image),
+            contentDescription = null,
+            contentScale = ContentScale.Crop,
+            modifier = Modifier
+                .fillMaxSize()
+                .graphicsLayer {
+                    val scale = 1.035f + drift * 0.018f
+                    scaleX = scale
+                    scaleY = scale
+                    translationX = -visualOffset * 54.dp.toPx()
+                    alpha = 1f - visualOffset * 0.20f
+                },
+        )
+        OnboardingArtMotion(page)
+        Box(
+            Modifier
+                .fillMaxSize()
+                .background(
+                    Brush.verticalGradient(
+                        0f to Color.Transparent,
+                        0.48f to SignalColors.Ink.copy(alpha = 0.08f),
+                        0.64f to SignalColors.Ink.copy(alpha = 0.88f),
+                        0.76f to SignalColors.Ink,
+                        1f to SignalColors.Ink,
+                    ),
+                ),
+        )
+
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .statusBarsPadding()
+                .navigationBarsPadding()
+                .padding(horizontal = Spacing.xxl),
+        ) {
+            VSpace(76.dp)
+            Box(Modifier.weight(1f))
+
+            Column(
+                modifier = Modifier.graphicsLayer {
+                    translationX = visualOffset * 32.dp.toPx()
+                    alpha = 1f - visualOffset * 0.45f
+                },
+            ) {
+                Text(
+                    text = stringResource(page.eyebrow).uppercase(),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = page.accent,
+                )
+                VSpace(Spacing.md)
+                Text(
+                    text = stringResource(page.title),
+                    style = MaterialTheme.typography.displaySmall,
+                    color = SignalColors.Cream,
+                )
+                VSpace(Spacing.md)
+                Text(
+                    text = stringResource(page.body),
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = SignalColors.CreamMuted,
+                )
+
+                when (page) {
+                    OnboardingPage.Private -> {
+                        VSpace(Spacing.lg)
+                        AccessAction(hasAccess, onConnectAccess)
+                    }
+                    OnboardingPage.Learn -> {
+                        VSpace(Spacing.md)
+                        TextButton(
+                            onClick = onEditPreferences,
+                            colors = ButtonDefaults.textButtonColors(contentColor = SignalColors.Mint),
+                            contentPadding = ButtonDefaults.TextButtonContentPadding,
+                        ) {
+                            Text(stringResource(R.string.onboarding_review_interruption_preferences))
+                        }
+                    }
+                    else -> Unit
+                }
+
+                VSpace(Spacing.lg)
+                OnboardingFooter(
+                    current = page.ordinal,
+                    accent = page.accent,
+                    isLast = page == OnboardingPage.Learn,
+                    onNext = onNext,
+                    onFinish = onFinish,
+                )
+                VSpace(Spacing.md)
+            }
+        }
+    }
+}
+
+@Composable
+private fun OnboardingTopBar(canSkip: Boolean, onSkip: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = Spacing.screenHorizontal, vertical = Spacing.md),
+            .statusBarsPadding()
+            .padding(horizontal = Spacing.xxl, vertical = Spacing.lg),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(
-            text = "AttentionOS",
-            style = MaterialTheme.typography.titleMedium,
+        AttentionBrand(
             modifier = Modifier.weight(1f),
+            nameColor = SignalColors.Cream,
         )
-        Text(
-            text = "${page + 1} / $total",
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        HSpace(Spacing.sm)
-        TextButton(onClick = onSkip) { Text("Skip") }
+        if (canSkip) {
+            TextButton(
+                onClick = onSkip,
+                colors = ButtonDefaults.textButtonColors(contentColor = SignalColors.Cream),
+            ) {
+                Text(stringResource(R.string.onboarding_skip))
+            }
+        }
     }
 }
 
-/**
- * Progress dots.
- *
- * The active dot stretches into a bar, which reads as position rather than decoration. Announced
- * as a single "step N of M" rather than as five separate elements.
- */
 @Composable
-private fun PageIndicator(current: Int, total: Int, modifier: Modifier = Modifier) {
-    val enabled = motionEnabled()
+private fun OnboardingFooter(
+    current: Int,
+    accent: Color,
+    isLast: Boolean,
+    onNext: () -> Unit,
+    onFinish: () -> Unit,
+) {
+    if (isLast) {
+        PageIndicator(current, accent)
+        VSpace(Spacing.lg)
+        Button(
+            onClick = onFinish,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(58.dp),
+            shape = Radius.card,
+            colors = ButtonDefaults.buttonColors(
+                containerColor = SignalColors.Tangerine,
+                contentColor = Color(0xFF3F1307),
+            ),
+        ) {
+            Text(stringResource(R.string.onboarding_start_using_attentionos), style = MaterialTheme.typography.labelLarge)
+            HSpace(Spacing.md)
+            ArrowGlyph(color = Color(0xFF3F1307))
+        }
+        Text(
+            text = stringResource(R.string.onboarding_replay_anytime_in_settings),
+            style = MaterialTheme.typography.bodySmall,
+            color = SignalColors.CreamMuted,
+            textAlign = TextAlign.Center,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = Spacing.sm),
+        )
+    } else {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            PageIndicator(current, accent, Modifier.weight(1f))
+            Button(
+                onClick = onNext,
+                modifier = Modifier.size(58.dp),
+                shape = CircleShape,
+                contentPadding = ButtonDefaults.ContentPadding,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = accent,
+                    contentColor = SignalColors.Ink,
+                ),
+            ) {
+                ArrowGlyph(color = SignalColors.Ink)
+            }
+        }
+    }
+}
+
+@Composable
+private fun PageIndicator(current: Int, accent: Color, modifier: Modifier = Modifier) {
+    val spoken = stringResource(R.string.onboarding_step_of_3, current + 1)
     Row(
-        modifier = modifier.semantics {
-            contentDescription = "Step ${current + 1} of $total"
-        },
-        horizontalArrangement = Arrangement.Center,
+        modifier = modifier.semantics { contentDescription = spoken },
+        horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        repeat(total) { index ->
-            val active = index == current
-            val width by animateDpAsState(
-                targetValue = if (active) Spacing.xxl else Spacing.sm,
-                animationSpec = Motion.snappy(enabled),
-                label = "indicator-width",
-            )
-            val color by animateColorAsState(
-                targetValue = if (active) {
-                    MaterialTheme.colorScheme.primary
-                } else {
-                    MaterialTheme.colorScheme.surfaceContainerHighest
-                },
-                animationSpec = Motion.snappy(enabled),
-                label = "indicator-color",
-            )
+        repeat(3) { index ->
             Box(
                 Modifier
-                    .padding(horizontal = Spacing.xs)
-                    .height(Spacing.sm)
-                    .width(width)
-                    .background(color, Radius.pill)
+                    .height(4.dp)
+                    .width(if (index == current) 48.dp else 30.dp)
+                    .background(
+                        if (index == current) accent else SignalColors.CreamMuted.copy(alpha = 0.32f),
+                        Radius.pill,
+                    )
                     .clearAndSetSemantics { },
             )
         }
@@ -252,150 +433,135 @@ private fun PageIndicator(current: Int, total: Int, modifier: Modifier = Modifie
 }
 
 @Composable
-private fun OnboardingActions(
-    isFirst: Boolean,
-    isLast: Boolean,
-    onBack: () -> Unit,
-    onNext: () -> Unit,
-    onFinish: () -> Unit,
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(
-                horizontal = Spacing.screenHorizontal,
-                vertical = Spacing.lg,
-            ),
-        horizontalArrangement = Arrangement.spacedBy(Spacing.md),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        AnimatedVisibility(visible = !isFirst) {
-            OutlinedButton(onClick = onBack) { Text("Back") }
-        }
-        Button(
-            onClick = if (isLast) onFinish else onNext,
-            modifier = Modifier.weight(1f),
+private fun AccessAction(hasAccess: Boolean, onConnect: () -> Unit) {
+    if (hasAccess) {
+        Row(
+            modifier = Modifier
+                .clip(Radius.pill)
+                .background(SignalColors.Mint.copy(alpha = 0.12f))
+                .border(1.dp, SignalColors.Mint.copy(alpha = 0.5f), Radius.pill)
+                .padding(horizontal = Spacing.md, vertical = Spacing.sm),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(if (isLast) "Start using my helper" else "Continue")
-        }
-    }
-}
-
-// ── Pages ─────────────────────────────────────────────────────────────────────
-
-@Composable
-private fun WelcomePage() {
-    Column {
-        VSpace(Spacing.xxxl)
-        BreathingMark()
-        VSpace(Spacing.xxl)
-        Text(
-            "Your notifications.\nOn your terms.",
-            style = MaterialTheme.typography.displaySmall,
-        )
-        VSpace(Spacing.md)
-        Text(
-            "A helper that learns what deserves your attention, quiets the rest, and never " +
-                "hides anything from you.",
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-    }
-}
-
-@Composable
-private fun PromisePage() {
-    Column {
-        VSpace(Spacing.xxl)
-        Text("Three promises", style = MaterialTheme.typography.headlineMedium)
-        VSpace(Spacing.lg)
-        listOf(
-            "Nothing is hidden" to
-                "Quiet means no sound or vibration. Every notification stays in your shade.",
-            "Urgent always reaches you" to
-                "Security codes, bank alerts, calls and alarms are never held back.",
-            "It stays on your phone" to
-                "Analysis runs on this device, encrypted. There is no account and no upload.",
-        ).forEachIndexed { index, (title, body) ->
-            PromiseRow(index + 1, title, body)
-            VSpace(Spacing.md)
-        }
-    }
-}
-
-@Composable
-private fun PromiseRow(number: Int, title: String, body: String) {
-    AttentionCard {
-        Row(verticalAlignment = Alignment.Top) {
-            Box(
-                modifier = Modifier
-                    .size(Spacing.xxl + Spacing.xs)
-                    .background(MaterialTheme.colorScheme.primaryContainer, Radius.pill),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(
-                    number.toString(),
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer,
-                    modifier = Modifier.clearAndSetSemantics { },
-                )
-            }
-            HSpace(Spacing.md)
-            Column {
-                Text(title, style = MaterialTheme.typography.titleMedium)
-                VSpace(Spacing.xxs)
-                Text(
-                    body,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun AccessPage(
-    connected: Boolean,
-    onOpenAccess: () -> Unit,
-    onRequestPermission: () -> Unit,
-) {
-    Column {
-        VSpace(Spacing.xxl)
-        Text("One permission", style = MaterialTheme.typography.headlineMedium)
-        VSpace(Spacing.md)
-        Text(
-            "Your helper needs to see notifications to sort them. That access stays on this " +
-                "device — the app has no internet permission at all.",
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        VSpace(Spacing.xl)
-        AttentionCard(tone = MaterialTheme.colorScheme.tertiaryContainer) {
+            SignalDot(SignalColors.Mint)
+            HSpace(Spacing.sm)
             Text(
-                "Notification access",
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onTertiaryContainer,
+                stringResource(R.string.onboarding_notification_access_connected),
+                style = MaterialTheme.typography.labelMedium,
+                color = SignalColors.Mint,
             )
-            VSpace(Spacing.xs)
-            Text(
-                "Opens Android's settings. You can turn it off any time.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.85f),
-            )
-            VSpace(Spacing.md)
-            Button(onClick = onOpenAccess) { Text("Allow access") }
         }
-        VSpace(Spacing.md)
-        TextButton(onClick = onRequestPermission) {
-            Text("Also allow reminders")
+    } else {
+        OutlinedButton(
+            onClick = onConnect,
+            border = androidx.compose.foundation.BorderStroke(1.dp, SignalColors.Mint),
+            colors = ButtonDefaults.outlinedButtonColors(contentColor = SignalColors.Mint),
+        ) {
+            Text(stringResource(R.string.onboarding_connect_notification_access))
         }
     }
 }
 
 @Composable
-private fun PreferencesPage(
+private fun OnboardingArtMotion(page: OnboardingPage) {
+    val enabled = motionEnabled()
+    val transition = rememberInfiniteTransition(label = "onboarding-overlay-${page.name}")
+    val loop by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = if (enabled) 1f else 0f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(5_600, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart,
+        ),
+        label = "overlay-loop",
+    )
+    Canvas(
+        modifier = Modifier
+            .fillMaxSize()
+            .clearAndSetSemantics { },
+    ) {
+        when (page) {
+            OnboardingPage.Sort -> {
+                repeat(6) { index ->
+                    val phase = (loop + index / 6f) % 1f
+                    val x = size.width * (0.22f + ((index * 0.19f) % 0.58f))
+                    val y = size.height * (0.09f + phase * 0.40f)
+                    drawCircle(
+                        color = when (index % 3) {
+                            0 -> SignalColors.Tangerine
+                            1 -> SignalColors.Mint
+                            else -> SignalColors.Cream
+                        }.copy(alpha = sin(phase * PI).toFloat().coerceAtLeast(0f) * 0.55f),
+                        radius = 3.5.dp.toPx(),
+                        center = androidx.compose.ui.geometry.Offset(x, y),
+                    )
+                }
+            }
+            OnboardingPage.Private -> {
+                repeat(3) { index ->
+                    val pulse = ((loop + index * 0.22f) % 1f)
+                    drawCircle(
+                        color = SignalColors.Mint.copy(alpha = (1f - pulse) * 0.18f),
+                        radius = size.minDimension * (0.18f + pulse * 0.24f),
+                        center = androidx.compose.ui.geometry.Offset(
+                            size.width * 0.5f,
+                            size.height * 0.37f,
+                        ),
+                        style = Stroke(1.2.dp.toPx(), cap = StrokeCap.Round),
+                    )
+                }
+            }
+            OnboardingPage.Learn -> {
+                repeat(7) { index ->
+                    val angle = PI + (PI * index / 6.0)
+                    val center = androidx.compose.ui.geometry.Offset(
+                        x = size.width * 0.5f + kotlin.math.cos(angle).toFloat() * size.width * 0.34f,
+                        y = size.height * 0.29f + kotlin.math.sin(angle).toFloat() * size.height * 0.13f,
+                    )
+                    val glow = (0.35f + 0.65f * sin((loop * PI * 2) - index * 0.55f).toFloat())
+                        .coerceIn(0.15f, 1f)
+                    drawCircle(SignalColors.Sun.copy(alpha = glow * 0.24f), 9.dp.toPx(), center)
+                    drawCircle(SignalColors.Sun.copy(alpha = glow), 3.dp.toPx(), center)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ArrowGlyph(color: Color) {
+    Canvas(Modifier.size(22.dp)) {
+        val stroke = 2.4.dp.toPx()
+        val centerY = size.height / 2f
+        drawLine(
+            color,
+            androidx.compose.ui.geometry.Offset(size.width * 0.12f, centerY),
+            androidx.compose.ui.geometry.Offset(size.width * 0.84f, centerY),
+            stroke,
+            StrokeCap.Round,
+        )
+        drawLine(
+            color,
+            androidx.compose.ui.geometry.Offset(size.width * 0.58f, size.height * 0.23f),
+            androidx.compose.ui.geometry.Offset(size.width * 0.86f, centerY),
+            stroke,
+            StrokeCap.Round,
+        )
+        drawLine(
+            color,
+            androidx.compose.ui.geometry.Offset(size.width * 0.58f, size.height * 0.77f),
+            androidx.compose.ui.geometry.Offset(size.width * 0.86f, centerY),
+            stroke,
+            StrokeCap.Round,
+        )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun PreferencesSheet(
     state: MainUiState,
+    onDismiss: () -> Unit,
     onFocusChanged: (Boolean) -> Unit,
     onCriticalSoundChanged: (Boolean) -> Unit,
     onCriticalVibrationChanged: (Boolean) -> Unit,
@@ -403,217 +569,177 @@ private fun PreferencesPage(
     onHighVibrationChanged: (Boolean) -> Unit,
     onReminderChanged: (Boolean) -> Unit,
 ) {
-    Column {
-        VSpace(Spacing.xxl)
-        Text("How should it reach you?", style = MaterialTheme.typography.headlineMedium)
-        VSpace(Spacing.md)
-        Text(
-            "You can change any of this later in Settings.",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        VSpace(Spacing.lg)
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        containerColor = SignalColors.InkRaised,
+        contentColor = SignalColors.Cream,
+        dragHandle = {
+            Box(
+                Modifier
+                    .padding(vertical = Spacing.md)
+                    .size(width = 44.dp, height = 4.dp)
+                    .background(SignalColors.CreamMuted.copy(alpha = 0.35f), Radius.pill),
+            )
+        },
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+                .navigationBarsPadding()
+                .padding(horizontal = Spacing.xl),
+        ) {
+            Text(stringResource(R.string.onboarding_interruption_preferences), style = MaterialTheme.typography.headlineSmall)
+            VSpace(Spacing.xs)
+            Text(
+                stringResource(R.string.onboarding_these_controls_are_also_available_in_settings),
+                style = MaterialTheme.typography.bodyMedium,
+                color = SignalColors.CreamMuted,
+            )
+            VSpace(Spacing.lg)
 
-        ChoiceCard(
-            title = "Attention Mode",
-            body = "Let your helper manage sound and vibration.",
-            checked = state.settings.focusMode,
-            onCheckedChange = onFocusChanged,
-        )
-        VSpace(Spacing.md)
-        ChoiceCard(
-            title = "Urgent alerts make a sound",
-            body = "Security, bank, calls and alarms.",
-            accent = PriorityColors.critical,
-            checked = state.settings.criticalSound,
-            onCheckedChange = onCriticalSoundChanged,
-        )
-        VSpace(Spacing.md)
-        ChoiceCard(
-            title = "Urgent alerts vibrate",
-            body = "A physical nudge for the things that matter most.",
-            accent = PriorityColors.critical,
-            checked = state.settings.criticalVibration,
-            onCheckedChange = onCriticalVibrationChanged,
-        )
-        VSpace(Spacing.md)
-        ChoiceCard(
-            title = "Important alerts make a sound",
-            body = "Things your helper thinks probably need you.",
-            accent = PriorityColors.high,
-            checked = state.settings.highSound,
-            onCheckedChange = onHighSoundChanged,
-        )
-        VSpace(Spacing.md)
-        ChoiceCard(
-            title = "Important alerts vibrate",
-            body = "Vibration for likely-important notifications.",
-            accent = PriorityColors.high,
-            checked = state.settings.highVibration,
-            onCheckedChange = onHighVibrationChanged,
-        )
-        VSpace(Spacing.md)
-        ChoiceCard(
-            title = "Daily review reminder",
-            body = "A quiet nudge to teach your helper what matters.",
-            checked = state.settings.reviewReminderEnabled,
-            onCheckedChange = onReminderChanged,
-        )
+            PreferenceToggle(
+                stringResource(R.string.onboarding_attention_mode),
+                stringResource(R.string.onboarding_use_your_priority_preferences_while_the_helper),
+                state.settings.focusMode,
+                onFocusChanged,
+            )
+            PreferenceDivider()
+            PreferenceToggle(
+                stringResource(R.string.onboarding_urgent_alert_sound),
+                stringResource(R.string.onboarding_security_finance_calls_and_alarms),
+                state.settings.criticalSound,
+                onCriticalSoundChanged,
+            )
+            PreferenceToggle(
+                stringResource(R.string.onboarding_urgent_alert_vibration),
+                stringResource(R.string.onboarding_a_physical_nudge_for_protected_alerts),
+                state.settings.criticalVibration,
+                onCriticalVibrationChanged,
+            )
+            PreferenceDivider()
+            PreferenceToggle(
+                stringResource(R.string.onboarding_important_alert_sound),
+                stringResource(R.string.onboarding_alerts_likely_to_need_your_attention),
+                state.settings.highSound,
+                onHighSoundChanged,
+            )
+            PreferenceToggle(
+                stringResource(R.string.onboarding_important_alert_vibration),
+                stringResource(R.string.onboarding_vibrate_for_likely_important_notifications),
+                state.settings.highVibration,
+                onHighVibrationChanged,
+            )
+            PreferenceDivider()
+            PreferenceToggle(
+                stringResource(R.string.onboarding_daily_review_reminder),
+                stringResource(R.string.onboarding_a_quiet_reminder_to_correct_recent_decisions),
+                state.settings.reviewReminderEnabled,
+                onReminderChanged,
+            )
+
+            VSpace(Spacing.lg)
+            Button(
+                onClick = onDismiss,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(54.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = SignalColors.Mint,
+                    contentColor = SignalColors.Ink,
+                ),
+            ) {
+                Text(stringResource(R.string.onboarding_save_preferences))
+            }
+            VSpace(Spacing.xxl)
+        }
     }
 }
 
 @Composable
-private fun ChoiceCard(
+private fun PreferenceToggle(
     title: String,
-    body: String,
+    subtitle: String,
     checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit,
-    accent: androidx.compose.ui.graphics.Color? = null,
+    onChanged: (Boolean) -> Unit,
 ) {
-    val enabled = motionEnabled()
     val haptics = rememberHaptics()
-    val container by animateColorAsState(
-        targetValue = if (checked) {
-            MaterialTheme.colorScheme.primaryContainer
-        } else {
-            MaterialTheme.colorScheme.surfaceContainerLow
-        },
-        animationSpec = Motion.snappy(enabled),
-        label = "choice-container",
-    )
-    val onContainer = if (checked) {
-        MaterialTheme.colorScheme.onPrimaryContainer
-    } else {
-        MaterialTheme.colorScheme.onSurface
-    }
-
-    Surface(
-        shape = Radius.card,
-        color = container,
-        onClick = {
-            haptics.select()
-            onCheckedChange(!checked)
-        },
-        modifier = Modifier.fillMaxWidth(),
-    ) {
-        Row(
-            Modifier.padding(Spacing.lg),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            accent?.let {
-                StatusDot(it, size = Spacing.sm)
-                HSpace(Spacing.md)
-            }
-            Column(Modifier.weight(1f)) {
-                Text(title, style = MaterialTheme.typography.titleSmall, color = onContainer)
-                Text(
-                    body,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = onContainer.copy(alpha = 0.75f),
-                )
-            }
-            androidx.compose.material3.Switch(
-                checked = checked,
-                onCheckedChange = null,
-                modifier = Modifier.clearAndSetSemantics { },
-            )
-        }
-    }
-}
-
-/** The payoff page: a moment of arrival rather than another form. */
-@Composable
-private fun ReadyPage() {
-    val enabled = motionEnabled()
-    var shown by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) { shown = true }
-
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        VSpace(Spacing.giant)
-        AnimatedVisibility(
-            visible = shown,
-            enter = fadeIn(Motion.gentle(enabled)) +
-                scaleIn(initialScale = 0.7f, animationSpec = Motion.playful(enabled)),
-        ) {
-            BreathingMark(size = 112.dp)
-        }
-        VSpace(Spacing.xxl)
-        Text("You're all set.", style = MaterialTheme.typography.displaySmall)
-        VSpace(Spacing.md)
-        Text(
-            "Your helper starts watching quietly. For the first week it only learns — it won't " +
-                "change how anything reaches you until it has checked itself.",
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        VSpace(Spacing.xl)
-        AttentionCard(tone = MaterialTheme.colorScheme.secondaryContainer) {
-            Text(
-                "Curious how it decides?",
-                style = MaterialTheme.typography.titleSmall,
-                color = MaterialTheme.colorScheme.onSecondaryContainer,
-            )
-            VSpace(Spacing.xxs)
-            Text(
-                "Insights has a live check you can run any time.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.85f),
-            )
-        }
-    }
-}
-
-/** The brand mark: two rings, slowly breathing. */
-@Composable
-private fun BreathingMark(size: androidx.compose.ui.unit.Dp = 88.dp) {
-    val enabled = motionEnabled()
-    val scale by animateFloatAsState(
-        targetValue = 1f,
-        animationSpec = Motion.playful(enabled),
-        label = "mark-scale",
-    )
-    val primary = MaterialTheme.colorScheme.primary
-    val secondary = MaterialTheme.colorScheme.secondary
-
-    Canvas(
+    Row(
         modifier = Modifier
-            .size(size)
-            .clearAndSetSemantics { },
+            .fillMaxWidth()
+            .padding(vertical = Spacing.md)
+            .semantics(mergeDescendants = true) {
+                toggleableState = ToggleableState(checked)
+            },
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(Spacing.md),
     ) {
-        val radius = this.size.minDimension / 2f
-        drawCircle(color = primary.copy(alpha = 0.10f), radius = radius * scale)
-        drawCircle(
-            color = primary,
-            radius = radius * 0.62f * scale,
-            style = Stroke(width = 3.dp.toPx(), cap = StrokeCap.Round),
+        Column(Modifier.weight(1f)) {
+            Text(title, style = MaterialTheme.typography.titleSmall, color = SignalColors.Cream)
+            Text(
+                subtitle,
+                style = MaterialTheme.typography.bodySmall,
+                color = SignalColors.CreamMuted,
+            )
+        }
+        Switch(
+            checked = checked,
+            onCheckedChange = {
+                haptics.select()
+                onChanged(it)
+            },
+            colors = SwitchDefaults.colors(
+                checkedThumbColor = SignalColors.Ink,
+                checkedTrackColor = SignalColors.Mint,
+                uncheckedThumbColor = SignalColors.CreamMuted,
+                uncheckedTrackColor = SignalColors.InkHigh,
+                uncheckedBorderColor = SignalColors.InkBorder,
+            ),
         )
-        drawCircle(color = secondary, radius = radius * 0.18f * scale)
     }
 }
 
-@Preview(name = "Onboarding · light", heightDp = 900)
+@Composable
+private fun PreferenceDivider() {
+    HorizontalDivider(color = SignalColors.InkBorder)
+}
+
+@Composable
+private fun ForceDarkSystemBars() {
+    val view = LocalView.current
+    val darkTheme = LocalDarkTheme.current
+    DisposableEffect(view, darkTheme) {
+        val window = (view.context as Activity).window
+        WindowCompat.getInsetsController(window, view).apply {
+            isAppearanceLightStatusBars = false
+            isAppearanceLightNavigationBars = false
+        }
+        onDispose {
+            WindowCompat.getInsetsController(window, view).apply {
+                isAppearanceLightStatusBars = !darkTheme
+                isAppearanceLightNavigationBars = !darkTheme
+            }
+        }
+    }
+}
+
+@Preview(name = "Onboarding")
 @Composable
 private fun OnboardingPreview() {
-    AttentionTheme(themeMode = ThemeMode.Light) {
-        OnboardingScreen(
-            state = MainUiState(isLoading = false),
-            onFocusChanged = {}, onCriticalSoundChanged = {}, onCriticalVibrationChanged = {},
-            onHighSoundChanged = {}, onHighVibrationChanged = {}, onReminderChanged = {},
-            onRunTestLab = {}, onComplete = {}, onOpenNotificationAccess = {},
-            onRequestNotificationPermission = {},
-        )
-    }
-}
-
-@Preview(name = "Onboarding · dark", heightDp = 900)
-@Composable
-private fun OnboardingDarkPreview() {
     AttentionTheme(themeMode = ThemeMode.Dark) {
         OnboardingScreen(
             state = MainUiState(isLoading = false),
-            onFocusChanged = {}, onCriticalSoundChanged = {}, onCriticalVibrationChanged = {},
-            onHighSoundChanged = {}, onHighVibrationChanged = {}, onReminderChanged = {},
-            onRunTestLab = {}, onComplete = {}, onOpenNotificationAccess = {},
+            onFocusChanged = {},
+            onCriticalSoundChanged = {},
+            onCriticalVibrationChanged = {},
+            onHighSoundChanged = {},
+            onHighVibrationChanged = {},
+            onReminderChanged = {},
+            onRunTestLab = {},
+            onComplete = {},
+            onOpenNotificationAccess = {},
             onRequestNotificationPermission = {},
         )
     }

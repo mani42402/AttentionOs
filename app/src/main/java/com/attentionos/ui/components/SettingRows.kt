@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -24,6 +25,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.attentionos.ui.theme.AttentionTheme
@@ -48,10 +51,10 @@ internal fun SettingsGroup(
     content: @Composable ColumnScope.() -> Unit,
 ) {
     Column(modifier = modifier.fillMaxWidth()) {
-        GroupLabel(title)
-        AttentionCard(
-            tone = MaterialTheme.colorScheme.surfaceContainerLow,
-            contentPadding = androidx.compose.foundation.layout.PaddingValues(
+        SignalEyebrow(title, modifier = Modifier.semantics { heading() })
+        VSpace(Spacing.sm)
+        SignalCard(
+            contentPadding = PaddingValues(
                 horizontal = Spacing.lg,
                 vertical = Spacing.xs,
             ),

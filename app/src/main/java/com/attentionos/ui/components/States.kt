@@ -22,10 +22,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import com.attentionos.R
 import com.attentionos.ui.theme.AttentionTheme
 import com.attentionos.ui.theme.Spacing
 import com.attentionos.ui.theme.ThemeMode
@@ -170,9 +172,9 @@ private fun StatesPreview() {
     AttentionTheme(themeMode = ThemeMode.Light) {
         Column {
             EmptyState(
-                title = "All caught up",
-                description = "New attention decisions will appear here as notifications arrive.",
-                action = { Button(onClick = {}) { Text("Open settings") } },
+                title = stringResource(R.string.state_all_caught_up),
+                description = stringResource(R.string.state_new_attention_decisions_will_appear_here_as),
+                action = { Button(onClick = {}) { Text(stringResource(R.string.state_open_settings)) } },
             )
         }
     }
@@ -184,10 +186,10 @@ private fun StatesDarkPreview() {
     AttentionTheme(themeMode = ThemeMode.Dark) {
         Column {
             ErrorState(
-                title = "Could not run the check",
-                description = "The on-device model did not respond.",
+                title = stringResource(R.string.state_could_not_run_the_check),
+                description = stringResource(R.string.state_the_on_device_model_did_not_respond),
                 onRetry = {},
-                retryLabel = "Try again",
+                retryLabel = stringResource(R.string.state_try_again),
             )
         }
     }
