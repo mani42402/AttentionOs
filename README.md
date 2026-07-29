@@ -91,7 +91,7 @@ found no quality loss on notification text while removing 20 MB from the downloa
 the install. See `docs/MODEL_STRATEGY.md` for the scorecards and the limitation this accepts.
 
 The token vectors stay frozen. Each explicit **Important** or **Not important** correction performs
-one online update to a 262-feature logistic classifier using the embedding plus time, focus mode,
+one online update to a 326-feature logistic classifier using the embedding plus time, focus mode,
 sender history, and the safe engine's base score. Its Float32 weights occupy about 1.6 KB. The
 personal model remains inactive for a seven-day shadow pilot and until it has at least 50 explicit
 corrections with at least 10 in both classes. It must also reach 65% shadow accuracy, 80%

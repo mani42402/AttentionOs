@@ -13,13 +13,25 @@ import kotlin.math.sin
 import kotlin.math.sqrt
 
 /**
- * A tiny online logistic classifier over frozen MiniLM embeddings and bounded context features.
+ * A tiny online logistic classifier over frozen sentence embeddings and bounded context.
  *
- * MiniLM remains frozen. Only these local weights are updated, once per explicit correction.
- * The model is intentionally inactive until it has enough examples from both classes.
+ * The encoder stays frozen; only these local weights move, and only on an explicit correction.
+ * The model is inactive until it has enough examples from both classes, and its probability is
+ * Platt-calibrated so the number that gets blended downstream means what it says.
  */
 object PersonalizedAttentionModel {
-    const val FEATURE_COUNT = EmbeddingCodec.EXPECTED_DIMENSIONS + 6
+    /**
+     * Hashed package buckets.
+     *
+     * Sender memory is keyed per conversation, so "this Slack workspace always matters" has to
+     * be relearned for every new conversation inside it. A hashed package feature lets the
+     * classifier pick that up in two or three corrections instead of dozens, for 64 extra
+     * weights. Collisions are harmless: two apps sharing a bucket simply share a prior.
+     */
+    const val PACKAGE_BUCKETS = 64
+    const val CONTEXT_FEATURES = 6
+    const val FEATURE_COUNT =
+        EmbeddingCodec.EXPECTED_DIMENSIONS + CONTEXT_FEATURES + PACKAGE_BUCKETS
     const val MIN_EXAMPLES = 50
     const val MIN_PER_CLASS = 10
     const val MIN_EVALUATIONS = 40
@@ -34,12 +46,10 @@ object PersonalizedAttentionModel {
      * produce nonsense rather than fail. A mismatch discards the stored model and relearns.
      *
      * v2: encoder moved from paraphrase-MiniLM-L3-v2 to all-MiniLM-L6-v2.
+     * v3: encoder moved from a 384-dimensional transformer to a 256-dimensional static table.
+     * v4: hashed package buckets appended, and the probability is Platt-calibrated.
      */
-    /**
-     * 3: the encoder moved from a 384-dimensional transformer to a 256-dimensional static
-     * table, so every stored weight vector describes a feature space that no longer exists.
-     */
-    const val MODEL_VERSION = 3
+    const val MODEL_VERSION = 4
 
     fun features(
         embedding: FloatArray?,
@@ -48,6 +58,7 @@ object PersonalizedAttentionModel {
         senderOpenRate: Float,
         focusModeEnabled: Boolean,
         baseScore: Float,
+        packageName: String? = null,
     ): FloatArray? {
         if (embedding == null || embedding.size != EmbeddingCodec.EXPECTED_DIMENSIONS) return null
         val result = FloatArray(FEATURE_COUNT)
@@ -62,6 +73,7 @@ object PersonalizedAttentionModel {
         result[context + 3] = senderOpenRate.coerceIn(0f, 1f) * 2f - 1f
         result[context + 4] = if (focusModeEnabled) 1f else -1f
         result[context + 5] = baseScore.coerceIn(0f, 1f) * 2f - 1f
+        if (packageName != null) result[context + CONTEXT_FEATURES + bucketOf(packageName)] = 1f
         return result
     }
 
@@ -71,7 +83,7 @@ object PersonalizedAttentionModel {
         for (index in features.indices) {
             logit += state.weights[index] * features[index]
         }
-        return sigmoid(logit)
+        return sigmoid(state.calibrationSlope * logit + state.calibrationIntercept)
     }
 
     fun update(
@@ -114,6 +126,15 @@ object PersonalizedAttentionModel {
                 if (evaluated && !important && personalWasImportant == true) 1 else 0,
         )
     }
+
+    /**
+     * Stable bucket for a package name.
+     *
+     * `String.hashCode` is specified by the Java language, so a bucket cannot drift between
+     * devices or releases the way a JVM-implementation-defined hash could.
+     */
+    internal fun bucketOf(packageName: String): Int =
+        Math.floorMod(packageName.hashCode(), PACKAGE_BUCKETS)
 
     fun fresh(): PersonalizedModelState = PersonalizedModelState(
         weights = FloatArray(FEATURE_COUNT),
@@ -186,12 +207,66 @@ object PersonalizedAttentionModel {
             }
         }
 
+        val calibration = calibrate(samples, weights, bias)
         return (counters ?: fresh()).copy(
             weights = weights,
             bias = bias,
             positiveCount = positives,
             negativeCount = negatives,
+            calibrationSlope = calibration.first,
+            calibrationIntercept = calibration.second,
         )
+    }
+
+    /**
+     * Platt scaling: fits `sigmoid(a * logit + b)` so the number means what it says.
+     *
+     * The raw sigmoid of a weighted, L2-regularised, class-balanced fit is not a probability —
+     * class weighting alone shifts it — yet the score is blended and then re-bucketed at fixed
+     * cutoffs as though 0.5 were a calibrated decision point. Two free parameters fix that
+     * without touching the decision boundary the weights learned.
+     *
+     * Targets follow Platt's own correction rather than hard 0/1, which is what stops the fit
+     * running away to infinite confidence on a separable set.
+     */
+    private fun calibrate(
+        samples: List<TrainingSample>,
+        weights: FloatArray,
+        bias: Float,
+    ): Pair<Float, Float> {
+        if (samples.size < MIN_CALIBRATION_SAMPLES) return 1f to 0f
+
+        val logits = FloatArray(samples.size)
+        samples.forEachIndexed { index, sample ->
+            var logit = bias
+            for (feature in 0 until FEATURE_COUNT) {
+                logit += weights[feature] * sample.features[feature]
+            }
+            logits[index] = logit
+        }
+        val positives = samples.count { it.important }
+        val negatives = samples.size - positives
+        val positiveTarget = (positives + 1f) / (positives + 2f)
+        val negativeTarget = 1f / (negatives + 2f)
+
+        var slope = 1f
+        var intercept = 0f
+        repeat(CALIBRATION_EPOCHS) {
+            var slopeGradient = 0f
+            var interceptGradient = 0f
+            samples.forEachIndexed { index, sample ->
+                val probability = sigmoid(slope * logits[index] + intercept)
+                val target = if (sample.important) positiveTarget else negativeTarget
+                val error = probability - target
+                slopeGradient += error * logits[index]
+                interceptGradient += error
+            }
+            val step = CALIBRATION_LEARNING_RATE / samples.size
+            slope -= step * slopeGradient
+            intercept -= step * interceptGradient
+        }
+        // A non-positive slope would invert the ranking the weights just learned.
+        return slope.coerceIn(0.05f, 10f) to intercept.coerceIn(-MAX_LOGIT, MAX_LOGIT)
     }
 
     /**
@@ -262,6 +337,11 @@ object PersonalizedAttentionModel {
     private const val REFIT_EPOCHS = 30
     private const val REFIT_LEARNING_RATE = 0.05
     private const val REFIT_SEED = 20260729L
+
+    /** Below this, two calibration parameters would fit the noise rather than the shape. */
+    private const val MIN_CALIBRATION_SAMPLES = 30
+    private const val CALIBRATION_EPOCHS = 200
+    private const val CALIBRATION_LEARNING_RATE = 4f
     /** Maps a cosine gap of ~0.2 onto a clearly-decided probability. */
     private const val PROTOTYPE_SHARPNESS = 8f
 }
@@ -298,6 +378,9 @@ data class PersonalizedModelState(
     val importantCorrectCount: Int = 0,
     val notImportantEvaluationCount: Int = 0,
     val falseImportantCount: Int = 0,
+    /** Platt scaling, identity until enough corrections exist to fit it. */
+    val calibrationSlope: Float = 1f,
+    val calibrationIntercept: Float = 0f,
 ) {
     val exampleCount: Int get() = positiveCount + negativeCount
     val personalAccuracy: Float
@@ -347,6 +430,9 @@ data class PersonalizedModelProgress(
     val importantCorrectCount: Int = 0,
     val notImportantEvaluationCount: Int = 0,
     val falseImportantCount: Int = 0,
+    /** Platt scaling, identity until enough corrections exist to fit it. */
+    val calibrationSlope: Float = 1f,
+    val calibrationIntercept: Float = 0f,
 ) {
     val exampleCount: Int get() = positiveCount + negativeCount
     val personalAccuracy: Float

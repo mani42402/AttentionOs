@@ -109,26 +109,40 @@ Centroids widen *when* personalization can help, never *whether* it is allowed t
 shadow pilot and every evaluation gate still hold, and the no-downgrade rule for protected
 categories is unchanged.
 
-### Deliberately deferred
+### Calibration and the package feature
 
-Three refinements from the original plan are not implemented. Each changes the feature space or
-the output shape, so each costs a version bump that discards learned weights:
+Two of the three refinements the plan deferred are now in, batched with the encoder swap so
+there is one weights reset rather than three:
 
-- **Probability calibration** (Platt scaling / tuned threshold). The blend currently feeds a raw
-  sigmoid into a score and re-buckets at fixed cutoffs, assuming 0.5 is the right decision
-  point. Calibration is the cheapest of the three and the one that most affects how the
-  probability behaves once it is blended.
-- **Hashed per-package bias feature** — would let the model learn "this workspace always
-  matters" in 2–3 corrections rather than dozens.
-- **Five-class ordinal head** — the model predicts binary, blends into a score, then re-buckets
-  into five levels, losing information twice.
+**Platt scaling.** The raw sigmoid of a class-weighted, L2-regularised fit is not a probability
+— class weighting alone shifts it — yet the score was blended and re-bucketed at fixed cutoffs
+as though 0.5 were a calibrated decision point. `refit` now fits `sigmoid(a·logit + b)` on the
+correction set, with Platt's own target correction rather than hard 0/1 so a separable set
+cannot drive the fit to infinite confidence. The slope is clamped positive: a negative slope
+would invert the ranking the weights just learned. Below 30 corrections the transform stays the
+identity, because two free parameters on a handful of points fit noise.
 
-These are best done together, and together with the static-embedding bake-off below: that
-evaluation may change the embedding to 256 dimensions, which rewrites `FEATURE_COUNT` and resets
-weights anyway. Batching them means one reset and one comparable measurement instead of four.
+**Hashed per-package bias.** 64 buckets appended to the feature vector, one set per
+notification. Sender memory is keyed per conversation, so "this Slack workspace always matters"
+had to be relearned for every new conversation inside it; the classifier can now pick that up in
+two or three corrections. Collisions are harmless — two apps sharing a bucket share a prior.
 
-They also cannot be judged properly yet. Personalization quality is only measurable against real
-correction histories, which do not exist until the app has been used for a while.
+Both land as schema v9 and `MODEL_VERSION` 4. The migration defaults calibration to slope 1 /
+intercept 0, which reproduces the previous behaviour exactly for a model fitted before it
+existed.
+
+### Still deferred: the five-class ordinal head
+
+The model still predicts binary, blends into a score, then re-buckets into five levels, losing
+information twice. It is deliberately not implemented yet.
+
+Unlike the other two, it changes the *output shape*, and every safety gate — the shadow pilot,
+the accuracy and important-recall thresholds, the no-downgrade rule for protected categories —
+is written against a binary decision. Rewriting all of them is only justified if the five-class
+head actually predicts better, and that cannot be established here: personalization quality is
+measurable only against real correction histories, which do not exist until the app has been
+used. Shipping it now would mean rewriting the safety gates on the strength of a guess.
+
 
 ## Ruled out
 

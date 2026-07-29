@@ -35,7 +35,7 @@ with the event and eventual training example using symmetric INT8 quantization (
 than 1,536 bytes as Float32). Exports include the Base64-encoded vector, encoding metadata, and exact
 language-model version so training jobs cannot silently mix incompatible feature spaces.
 
-The personalized classifier has 262 inputs: the frozen 256-dimensional embedding, hour
+The personalized classifier has 326 inputs: the frozen 256-dimensional embedding, hour
 sine/cosine, sender importance, sender open rate, focus-mode state, and the safe engine's base
 score. A correction runs one bounded stochastic-gradient update and persists 390 Float32 weights
 (about 1.6 KB) plus a bias and class counts. No background training job, wake lock, or model
