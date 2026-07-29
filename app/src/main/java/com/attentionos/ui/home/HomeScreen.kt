@@ -3,6 +3,7 @@ package com.attentionos.ui.home
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.animateIntAsState
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -44,7 +45,10 @@ import com.attentionos.data.db.NotificationListItem
 import com.attentionos.domain.AttentionPriority
 import com.attentionos.ui.MainUiState
 import com.attentionos.ui.components.AttentionCard
+import com.attentionos.ui.components.BentoTile
 import com.attentionos.ui.components.EmptyState
+import com.attentionos.ui.components.FeatureCard
+import com.attentionos.ui.components.GlassCard
 import com.attentionos.ui.components.HSpace
 import com.attentionos.ui.components.LoadingState
 import com.attentionos.ui.components.PriorityChip
@@ -124,7 +128,8 @@ internal fun DashboardScreen(
             }
         }
 
-        item { TodayCard(state) }
+        item { TodayHero(state) }
+        item { BentoRow(state) }
 
         item {
             AnimatedVisibility(
@@ -203,8 +208,7 @@ private fun ProtectionHero(
         label = "hero-content",
     )
 
-    Surface(shape = Radius.hero, color = container) {
-        Column(Modifier.padding(Spacing.xl)) {
+    GlassCard(shape = Radius.hero, contentPadding = PaddingValues(Spacing.xl)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 StatusDot(
                     color = if (active) {
@@ -297,68 +301,101 @@ private fun ProtectionHero(
                 style = MaterialTheme.typography.labelMedium,
                 color = onContainer.copy(alpha = 0.65f),
             )
-        }
     }
 }
 
-/** Today's counts, with a bar that shows the split rather than describing it. */
+/**
+ * The day's headline figure.
+ *
+ * A single oversized numeral on a gradient feature card, the way every reference design leads:
+ * one number large enough to read at arm's length, its label small and quiet beneath.
+ */
 @Composable
-private fun TodayCard(state: MainUiState) {
-    AttentionCard {
+private fun TodayHero(state: MainUiState) {
+    val enabled = motionEnabled()
+    val count by animateIntAsState(
+        targetValue = state.receivedToday,
+        animationSpec = Motion.gentle(enabled),
+        label = "today-count",
+    )
+
+    FeatureCard {
         Text(
             "TODAY",
             style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.primary,
+            color = Color.White.copy(alpha = 0.72f),
         )
         VSpace(Spacing.md)
         Row(verticalAlignment = Alignment.Bottom) {
             Text(
-                text = state.receivedToday.toString(),
-                style = MaterialTheme.typography.displaySmall,
+                text = count.toString(),
+                style = MaterialTheme.typography.displayLarge,
+                color = Color.White,
             )
-            HSpace(Spacing.sm)
+            HSpace(Spacing.md)
             Text(
-                text = if (state.receivedToday == 1) {
-                    "notification checked"
-                } else {
-                    "notifications checked"
-                },
+                text = if (state.receivedToday == 1) "notification\nchecked" else "notifications\nchecked",
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(bottom = 6.dp),
+                color = Color.White.copy(alpha = 0.78f),
+                modifier = Modifier.padding(bottom = Spacing.md),
             )
         }
-
         VSpace(Spacing.lg)
         DistributionBar(
             important = state.importantToday,
             quiet = state.queuedToday,
             total = state.receivedToday,
         )
-
-        VSpace(Spacing.lg)
-        Row(horizontalArrangement = Arrangement.spacedBy(Spacing.xxl)) {
-            Metric(state.importantToday, "needed attention", PriorityColors.high)
-            Metric(state.queuedToday, "stayed quiet", PriorityColors.low)
-        }
-
         if (state.estimatedMinutesSaved > 0) {
             VSpace(Spacing.md)
             Text(
                 "About ${state.estimatedMinutesSaved} min of focus protected",
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = Color.White.copy(alpha = 0.75f),
+            )
+        }
+    }
+}
+
+/** Mixed-size glass tiles, the bento pattern from the references. */
+@Composable
+private fun BentoRow(state: MainUiState) {
+    Row(horizontalArrangement = Arrangement.spacedBy(Spacing.md)) {
+        BentoTile(modifier = Modifier.weight(1f)) {
+            StatusDot(PriorityColors.high, size = 7.dp)
+            VSpace(Spacing.sm)
+            Text(
+                state.importantToday.toString(),
+                style = MaterialTheme.typography.headlineMedium,
+            )
+            Text(
+                "needed you",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.65f),
+            )
+        }
+        BentoTile(modifier = Modifier.weight(1f)) {
+            StatusDot(PriorityColors.low, size = 7.dp)
+            VSpace(Spacing.sm)
+            Text(
+                state.queuedToday.toString(),
+                style = MaterialTheme.typography.headlineMedium,
+            )
+            Text(
+                "stayed quiet",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.65f),
             )
         }
     }
 }
 
 /**
- * Proportional bar for the day's split.
+ * Proportional bar for the day's split, drawn on the feature card.
  *
- * Widths animate so an arriving notification visibly shifts the balance, and the whole bar
- * carries a text description — the shape is the only thing conveying the numbers, so without one
- * it would be invisible to a screen reader.
+ * Widths animate so an arriving notification visibly shifts the balance, and the bar carries a
+ * text description — the shape is the only thing conveying the numbers, so without one it would
+ * be invisible to a screen reader.
  */
 @Composable
 private fun DistributionBar(important: Int, quiet: Int, total: Int) {
@@ -374,7 +411,7 @@ private fun DistributionBar(important: Int, quiet: Int, total: Int) {
         animationSpec = Motion.gentle(enabled),
         label = "share-quiet",
     )
-    val track = MaterialTheme.colorScheme.surfaceContainerHighest
+    val track = Color.White.copy(alpha = 0.22f)
 
     Canvas(
         modifier = Modifier

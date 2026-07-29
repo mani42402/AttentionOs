@@ -21,6 +21,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -38,26 +39,40 @@ import com.attentionos.ui.theme.motionEnabled
 /**
  * The app's standard content container.
  *
- * Uses surface *tone* for depth rather than a border. The old UI drew a 1dp outlineVariant
- * stroke around roughly fifteen separate cards by hand, which is both repetitive and heavier
- * looking than the tonal system Material 3 provides.
+ * Delegates to [GlassCard] so that every screen picks up the glass treatment from one place.
+ * The `tone` parameter is kept because several screens use it to mean "this card is
+ * emphasised"; a tinted card now renders as tinted glass rather than an opaque panel, which is
+ * what keeps the aurora visible through the whole app.
  */
 @Composable
 internal fun AttentionCard(
     modifier: Modifier = Modifier,
-    tone: Color = MaterialTheme.colorScheme.surfaceContainerLow,
+    tone: Color = Color.Unspecified,
     shape: Shape = Radius.card,
     contentPadding: androidx.compose.foundation.layout.PaddingValues =
         androidx.compose.foundation.layout.PaddingValues(Spacing.xl),
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    Surface(
-        modifier = modifier.fillMaxWidth(),
-        shape = shape,
-        color = tone,
-        tonalElevation = Elevation.flat,
-    ) {
-        Column(modifier = Modifier.padding(contentPadding), content = content)
+    if (tone == Color.Unspecified) {
+        GlassCard(
+            modifier = modifier,
+            shape = shape,
+            contentPadding = contentPadding,
+            content = content,
+        )
+    } else {
+        // An emphasised card: the tint sits over glass rather than replacing it.
+        Box(modifier = modifier) {
+            GlassCard(shape = shape, contentPadding = contentPadding) {
+                content()
+            }
+            Box(
+                Modifier
+                    .matchParentSize()
+                    .clip(shape)
+                    .background(tone.copy(alpha = 0.18f)),
+            )
+        }
     }
 }
 

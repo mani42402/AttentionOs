@@ -216,7 +216,7 @@ private fun ReviewSession(
     onSkip: (NotificationListItem) -> Unit,
     onClose: () -> Unit,
 ) {
-    Surface(color = MaterialTheme.colorScheme.background) {
+    Box {
         Column(
             Modifier
                 .fillMaxSize()

@@ -52,6 +52,7 @@ import com.attentionos.ui.onboarding.OnboardingScreen
 import com.attentionos.ui.review.ActivityScreen
 import com.attentionos.ui.settings.SettingsScreen
 import com.attentionos.ui.theme.AttentionTheme
+import com.attentionos.ui.theme.AuroraBackground
 import com.attentionos.ui.theme.ThemeMode
 import kotlinx.coroutines.flow.MutableStateFlow
 
@@ -112,11 +113,12 @@ class MainActivity : ComponentActivity() {
                     }
                 }
 
-                Surface(
-                    modifier = Modifier.fillMaxSize(),
-                    color = MaterialTheme.colorScheme.background,
-                    contentColor = MaterialTheme.colorScheme.onBackground,
-                ) {
+                val darkCanvas = when (ThemeMode.fromStorage(uiState.settings.themeMode)) {
+                    ThemeMode.System -> androidx.compose.foundation.isSystemInDarkTheme()
+                    ThemeMode.Light -> false
+                    ThemeMode.Dark -> true
+                }
+                AuroraBackground(dark = darkCanvas) {
                     if (!uiState.isLoading && !uiState.settings.onboardingComplete) {
                         OnboardingScreen(
                             state = uiState,
@@ -238,7 +240,7 @@ private fun AttentionApp(
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),
-        containerColor = MaterialTheme.colorScheme.background,
+        containerColor = androidx.compose.ui.graphics.Color.Transparent,
         contentWindowInsets = WindowInsets(0),
         snackbarHost = { SnackbarHost(snackbarHostState) },
         bottomBar = {

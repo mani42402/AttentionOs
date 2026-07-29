@@ -17,19 +17,19 @@ import androidx.compose.ui.graphics.Color
  */
 
 // ── Brand ramp ────────────────────────────────────────────────────────────────
-private val Indigo10 = Color(0xFF0A0B2E)
-private val Indigo20 = Color(0xFF191A4A)
-private val Indigo30 = Color(0xFF2B2D68)
-private val Indigo40 = Color(0xFF4045A8)
-private val Indigo80 = Color(0xFFBEC0FF)
-private val Indigo90 = Color(0xFFE1E0FF)
+private val Indigo10 = Color(0xFF12082E)
+private val Indigo20 = Color(0xFF241556)
+private val Indigo30 = Color(0xFF3B2A8C)
+private val Indigo40 = Color(0xFF5B3FE0)
+private val Indigo80 = Color(0xFFC7B6FF)
+private val Indigo90 = Color(0xFFE9E1FF)
 
 // ── Teal (secondary) ──────────────────────────────────────────────────────────
 private val Teal10 = Color(0xFF00201A)
 private val Teal20 = Color(0xFF00382E)
 private val Teal30 = Color(0xFF005143)
 private val Teal40 = Color(0xFF006C59)
-private val Teal80 = Color(0xFF54DBBC)
+private val Teal80 = Color(0xFF38E0C0)
 private val Teal90 = Color(0xFF74F8D7)
 
 // ── Amber (tertiary) ──────────────────────────────────────────────────────────
@@ -77,11 +77,11 @@ private val NeutralVariant90 = Color(0xFFE4E1EC)
  * container each is drawn on rather than by changing the colour itself.
  */
 object PriorityColors {
-    val critical = Color(0xFFE5484D)
-    val high = Color(0xFFF76B15)
-    val medium = Color(0xFF5257C7)
-    val low = Color(0xFF3E9B8F)
-    val silent = Color(0xFF8B8A94)
+    val critical = Color(0xFFFF5A6E)
+    val high = Color(0xFFFF9F45)
+    val medium = Color(0xFF7C5CFF)
+    val low = Color(0xFF38E0C0)
+    val silent = Color(0xFF8B85AD)
 }
 
 internal val AttentionLightColors = lightColorScheme(
@@ -106,8 +106,8 @@ internal val AttentionLightColors = lightColorScheme(
     errorContainer = Red90,
     onErrorContainer = Red10,
 
-    background = Neutral98,
-    onBackground = Neutral10,
+    background = Color(0xFFF5F1FF),
+    onBackground = Color(0xFF1A1230),
     surface = Neutral98,
     onSurface = Neutral10,
     surfaceVariant = NeutralVariant90,
@@ -152,8 +152,8 @@ internal val AttentionDarkColors = darkColorScheme(
     errorContainer = Red30,
     onErrorContainer = Red90,
 
-    background = Neutral6,
-    onBackground = Neutral90,
+    background = Color(0xFF120C30),
+    onBackground = Color(0xFFF4F1FF),
     surface = Neutral6,
     onSurface = Neutral90,
     surfaceVariant = NeutralVariant30,

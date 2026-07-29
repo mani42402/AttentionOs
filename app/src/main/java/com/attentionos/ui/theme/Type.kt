@@ -84,8 +84,8 @@ private fun interStyle(
  * loose; labels carry positive tracking so small uppercase text stays readable.
  */
 val AttentionTypography = Typography(
-    displayLarge = interStyle(52, 56, FontWeight.ExtraBold, -1.8),
-    displayMedium = interStyle(42, 48, FontWeight.ExtraBold, -1.2),
+    displayLarge = interStyle(64, 66, FontWeight.ExtraBold, -2.4),
+    displayMedium = interStyle(48, 52, FontWeight.ExtraBold, -1.6),
     displaySmall = interStyle(34, 40, FontWeight.Bold, -0.8),
 
     headlineLarge = interStyle(30, 36, FontWeight.Bold, -0.6),

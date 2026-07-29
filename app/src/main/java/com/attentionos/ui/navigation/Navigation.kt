@@ -1,11 +1,13 @@
 package com.attentionos.ui.navigation
 
 import android.provider.Settings
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -18,8 +20,10 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Settings
@@ -32,13 +36,17 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import com.attentionos.ui.theme.LocalMotionEnabled
+import com.attentionos.ui.theme.rememberHaptics
 
 /**
  * The four top-level tabs.
@@ -62,89 +70,114 @@ internal enum class AppDestination(
     }
 }
 
+/**
+ * Floating glass navigation bar.
+ *
+ * A pill that hovers over the aurora rather than a full-width slab pinned to the edge, matching
+ * the navigation references. The active tab is a filled violet pill carrying icon *and* label;
+ * inactive tabs show the icon alone, so the current location is obvious without reading.
+ */
 @Composable
 internal fun HelperBottomBar(
     selected: AppDestination,
     onSelected: (AppDestination) -> Unit,
 ) {
-    Surface(
-        color = MaterialTheme.colorScheme.surface,
-        shadowElevation = 8.dp,
+    val haptics = rememberHaptics()
+    val enabled = LocalMotionEnabled.current
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(
+                start = 16.dp,
+                end = 16.dp,
+                bottom = WindowInsets.navigationBars.asPaddingValues()
+                    .calculateBottomPadding() + 8.dp,
+            ),
     ) {
-        Column {
-            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(66.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                AppDestination.entries.forEach { destination ->
-                    val active = destination == selected
-                    val duration = if (LocalMotionEnabled.current) 220 else 0
-                    val iconScale by animateFloatAsState(
-                        if (active) 1f else 0.94f,
-                        tween(duration),
-                        label = "navigation-scale",
-                    )
-                    val indicatorColor by animateColorAsState(
-                        if (active) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
-                        tween(duration),
-                        label = "navigation-indicator",
-                    )
-                    Column(
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxSize()
-                            .clickable { onSelected(destination) },
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center,
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(width = 42.dp, height = 30.dp)
-                                .graphicsLayer {
-                                    scaleX = iconScale
-                                    scaleY = iconScale
-                                }
-                                .background(indicatorColor, RoundedCornerShape(11.dp)),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            NavigationGlyph(destination, active)
-                        }
-                        Spacer(Modifier.height(3.dp))
-                        Text(
-                            destination.label,
-                            style = MaterialTheme.typography.labelMedium,
-                            color = if (active) MaterialTheme.colorScheme.primary else {
-                                MaterialTheme.colorScheme.onSurfaceVariant
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(percent = 50))
+                .background(Color.White.copy(alpha = 0.10f))
+                .border(
+                    width = 1.dp,
+                    brush = Brush.verticalGradient(
+                        listOf(
+                            Color.White.copy(alpha = 0.24f),
+                            Color.White.copy(alpha = 0.06f),
+                        ),
+                    ),
+                    shape = RoundedCornerShape(percent = 50),
+                )
+                .padding(6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            AppDestination.entries.forEach { destination ->
+                val active = destination == selected
+                val pill by animateColorAsState(
+                    targetValue = if (active) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        Color.Transparent
+                    },
+                    animationSpec = tween(if (enabled) 240 else 0),
+                    label = "nav-pill",
+                )
+                val content by animateColorAsState(
+                    targetValue = if (active) {
+                        MaterialTheme.colorScheme.onPrimary
+                    } else {
+                        MaterialTheme.colorScheme.onBackground.copy(alpha = 0.65f)
+                    },
+                    animationSpec = tween(if (enabled) 240 else 0),
+                    label = "nav-content",
+                )
+
+                Row(
+                    modifier = Modifier
+                        .weight(if (active) 1.5f else 1f)
+                        .height(48.dp)
+                        .clip(RoundedCornerShape(percent = 50))
+                        .background(pill)
+                        .selectable(
+                            selected = active,
+                            role = Role.Tab,
+                            onClick = {
+                                haptics.select()
+                                onSelected(destination)
                             },
-                        )
+                        ),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    NavigationGlyph(destination, active, content)
+                    // The label appears only on the active tab, which is what keeps a
+                    // four-item bar from looking crowded.
+                    AnimatedVisibility(visible = active) {
+                        Row {
+                            Spacer(Modifier.width(6.dp))
+                            Text(
+                                destination.label,
+                                style = MaterialTheme.typography.labelLarge,
+                                color = content,
+                                maxLines = 1,
+                            )
+                        }
                     }
                 }
             }
-            Spacer(
-                Modifier
-                    .fillMaxWidth()
-                    .height(
-                        WindowInsets.navigationBars.asPaddingValues()
-                            .calculateBottomPadding(),
-                    )
-                    .background(MaterialTheme.colorScheme.surface),
-            )
         }
     }
 }
 
 @Composable
-internal fun NavigationGlyph(destination: AppDestination, active: Boolean) {
-    val color by animateColorAsState(
-        if (active) MaterialTheme.colorScheme.primary else {
-            MaterialTheme.colorScheme.onSurfaceVariant
-        },
-        tween(if (LocalMotionEnabled.current) 220 else 0),
-        label = "navigation-color",
-    )
+internal fun NavigationGlyph(
+    destination: AppDestination,
+    active: Boolean,
+    color: Color = MaterialTheme.colorScheme.onSurfaceVariant,
+) {
     Canvas(Modifier.size(22.dp)) {
         val stroke = Stroke(width = 2.1.dp.toPx(), cap = StrokeCap.Round)
         val w = size.width

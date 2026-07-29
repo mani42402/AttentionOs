@@ -51,7 +51,8 @@ val AttentionShapes = Shapes(
 /** Radii for surfaces that are not Material components — hero panels, sheets, pills. */
 object Radius {
     val pill = RoundedCornerShape(percent = 50)
-    val card = RoundedCornerShape(20.dp)
+    val tile = RoundedCornerShape(20.dp)
+    val card = RoundedCornerShape(24.dp)
     val hero = RoundedCornerShape(28.dp)
     val sheet = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
 }

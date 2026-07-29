@@ -32,7 +32,7 @@ data class AppSettings(
     val reviewReminderEnabled: Boolean = false,
     val reviewReminderTimes: Set<Int> = setOf(19 * 60),
     /** Stored name of a [com.attentionos.ui.theme.ThemeMode]; defaults to following the system. */
-    val themeMode: String = "System",
+    val themeMode: String = "Dark",
     /** Material You: adopt the wallpaper palette instead of the brand palette. */
     val dynamicColor: Boolean = false,
     val motionEnabled: Boolean = true,
@@ -62,7 +62,7 @@ class SettingsRepository(private val context: Context) {
                 ?.toSet()
                 ?.takeIf(Set<Int>::isNotEmpty)
                 ?: setOf((values[REVIEW_REMINDER_HOUR] ?: 19) * 60),
-            themeMode = values[THEME_MODE] ?: "System",
+            themeMode = values[THEME_MODE] ?: "Dark",
             dynamicColor = values[DYNAMIC_COLOR] ?: false,
             motionEnabled = values[MOTION_ENABLED] ?: true,
             screenSecurity = values[SCREEN_SECURITY] ?: true,

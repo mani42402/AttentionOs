@@ -171,7 +171,7 @@ private fun AttentionSplitCard(state: MainUiState) {
 
 @Composable
 private fun AttentionRing(importantFraction: Float, quietFraction: Float, hasData: Boolean) {
-    val track = MaterialTheme.colorScheme.surfaceContainerHighest
+    val track = Color.White.copy(alpha = 0.16f)
     Canvas(
         modifier = Modifier
             .size(116.dp)
@@ -293,7 +293,7 @@ private fun LearningJourneyCard(state: MainUiState, onReview: () -> Unit) {
 
 @Composable
 private fun ProgressTrack(progress: Float) {
-    val track = MaterialTheme.colorScheme.surfaceContainerHighest
+    val track = Color.White.copy(alpha = 0.16f)
     val fill = MaterialTheme.colorScheme.primary
     Canvas(
         modifier = Modifier

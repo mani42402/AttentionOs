@@ -103,7 +103,7 @@ internal fun OnboardingScreen(
         scope.launch { pagerState.animateScrollToPage(pagerState.currentPage - 1) }
     }
 
-    Surface(color = MaterialTheme.colorScheme.background) {
+    Box {
         Column(
             Modifier
                 .fillMaxSize()
