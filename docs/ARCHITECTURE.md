@@ -135,18 +135,29 @@ personalization policy, where divergence would silently change safety behaviour.
 - Reminder scheduling is a no-op when the stored schedule has not changed.
 - UI motion can be disabled; continuous ambient animations are not composed when off.
 
-## Measured size
+## Measured budgets (Phase 2)
 
-Universal release APKs overstate delivery size because Android stores native libraries
-uncompressed so they can be mapped without extraction. The figure that matters is the bundle
-Play consumes.
+Re-measured per phase, on an Android 16 emulator with the minified release build. Emulator
+startup is pessimistic by roughly 2-3x against real hardware; the per-notification figure is
+device-independent enough to compare directly.
 
-| Artifact | Size |
-|---|---|
-| Release AAB, excluding build metadata | 9.8 MB |
-| Universal release APK (local only) | 11.9 MB |
-| `potion-base-8m-q8.bin` | 7.3 MB stored, 6.5 MB compressed |
-| `libsqlcipher.so` | 2.0 MB stored |
+| Budget | Target | Measured |
+|---|---|---|
+| Download size | <= 30 MB | 9.8 MB |
+| Install footprint | not previously tracked | 11.9 MB |
+| Per-notification inference | well under the battery budget | 1.9 ms median, 3.3 ms p90 |
+| Encoder load, once per process | one-off | ~1.7 s cold, then cached |
+| Cold start, minified release | no target set | ~1.24 s median (840-1746 ms, emulator) |
+
+The encoder load reads a 29,528-line vocabulary and maps the table. It happens once per process
+on the first notification, off the UI thread, and never again.
+
+A **baseline profile and macrobenchmark are deliberately not here.** The plan schedules them
+after Phase 2, they need a separate benchmark module, and the startup figure above does not yet
+show a problem worth that infrastructure. Startup should be re-measured on real hardware before
+deciding.
+
+### How it got here
 
 The encoder was `all-MiniLM-L6-v2` on ONNX Runtime until the Phase 2 bake-off. The runtime alone
 measured 26.7 MB — larger than the model it existed to run — and the pair accounted for 91% of
@@ -156,15 +167,30 @@ labelled set. `docs/MODEL_STRATEGY.md` records both scorecards.
 
 ## Interface system
 
-The Compose interface uses a restrained navy, cobalt, and teal light/dark color system, a compact
-typography scale, consistent shapes, a full-width fixed bottom menu, and reusable control panels.
-Canvas draws the small custom navigation icons and distribution bars directly, avoiding an icon or
-charting dependency. Navigation selection and other short transitions animate only when the
-persistent Motion effects preference is enabled.
+The Compose interface is the Signal Garden system: an ink/cream canvas with tangerine, mint and
+sun accents, one pigment set shared by the onboarding artwork and the native screens, and a single
+inverted feature surface per screen carrying the hero content. `docs/DESIGN_SYSTEM.md` holds the
+tokens and the component inventory.
 
-Onboarding is replayable from Settings. It explains the helper in plain language and includes a
-safe interactive notification demo that saves nothing. Replaying changes only the completion flag:
-the original pilot start time, decisions, training examples, and personalized weights remain intact.
+Canvas draws the navigation glyphs, the priority flow lanes, the distribution bar and the
+completion burst directly, avoiding an icon or charting dependency. Every chart encodes its data —
+a lane whose geometry ignores its value is not allowed, because it reads as a measurement.
+
+Navigation is a floating dock below 600 dp and a rail above it, from one shared item composable so
+the two cannot drift apart. Content is capped to a readable measure on wide windows. Motion is
+gated on the persistent preference throughout, and continuous ambient animation is not composed
+when it is off.
+
+Accessibility is asserted rather than reviewed: `AccessibilitySemanticsTest` checks that drawn
+charts carry spoken values, that a zero lane still announces its number, that section titles are
+headings, that decision rows merge into one announcement, and that the protection toggle exposes
+its state. Progress bars carry `progressBarRangeInfo`. RTL mirrors the directional charts, which
+otherwise pointed away from their labels because a Canvas draws in physical coordinates.
+
+Onboarding is replayable from Settings. Three full-bleed illustrated chapters explain the helper in
+plain language, with swipe, buttons and predictive back all stepping through. Replaying changes
+only the completion flag: the original pilot start time, decisions, training examples, and
+personalized weights remain intact.
 
 ## Fine-tuning path
 
