@@ -8,7 +8,7 @@ deleting anything. This repository contains a functional native MVP, not a web m
 
 - Native Kotlin + Jetpack Compose application
 - Android `NotificationListenerService`
-- Real pretrained MiniLM transformer inference using ONNX Runtime
+- Real pretrained sentence embeddings from a memory-mapped static table, no inference runtime
 - Five-level attention classification: critical, high, medium, low, and silent
 - Attention mode that ranks low-value notifications without removing them
 - Per-priority sound and vibration controls for Critical, High, and Medium
@@ -16,7 +16,7 @@ deleting anything. This repository contains a functional native MVP, not a web m
 - Room database for decisions, learned sender memory, and training examples
 - Local feedback loop based on notification opens and dismissals
 - Explicit Important / Not important corrections as high-confidence training labels
-- Quantized 384-dimensional MiniLM embeddings stored with labeled examples
+- Quantized 256-dimensional embeddings stored with labeled examples
 - A persisted local logistic model that incrementally trains from explicit corrections
 - Shadow evaluation against the pretrained baseline before personalization can activate
 - A mandatory seven-day shadow pilot before personalization can activate
@@ -80,14 +80,18 @@ By default the app stores:
 
 ## Performance model
 
-The notification language path uses the pretrained, INT8-quantized
-`sentence-transformers/paraphrase-MiniLM-L3-v2` model. It produces semantic embeddings locally via
-ONNX Runtime. The model is warmed away from the UI thread, capped at 64 tokens, serialized through
-one inference lane, and configured for one CPU thread. A deterministic analyzer remains as a
-fail-safe if model loading or inference ever fails.
+The notification language path uses `potion-base-8M`, an INT8-quantized static token-embedding
+table distilled from `bge-base-en-v1.5`. A sentence embedding is the mean of its token vectors,
+normalized — a few thousand additions, with no inference runtime and nothing to warm up beyond
+mapping the table out of the APK. A deterministic analyzer remains as a fail-safe if the table
+ever fails to load.
 
-MiniLM's weights stay frozen. Each explicit **Important** or **Not important** correction performs
-one online update to a 390-feature logistic classifier using the embedding plus time, focus mode,
+It replaced an `all-MiniLM-L6-v2` transformer running on ONNX Runtime, after a measured bake-off
+found no quality loss on notification text while removing 20 MB from the download and 41 MB from
+the install. See `docs/MODEL_STRATEGY.md` for the scorecards and the limitation this accepts.
+
+The token vectors stay frozen. Each explicit **Important** or **Not important** correction performs
+one online update to a 262-feature logistic classifier using the embedding plus time, focus mode,
 sender history, and the safe engine's base score. Its Float32 weights occupy about 1.6 KB. The
 personal model remains inactive for a seven-day shadow pilot and until it has at least 50 explicit
 corrections with at least 10 in both classes. It must also reach 65% shadow accuracy, 80%
@@ -122,7 +126,7 @@ app/src/main/java/com/attentionos/
 │   ├── settings/  DataStore-backed preferences
 │   └── repository/ decision recording, feedback, hashing
 ├── domain/        priority engine, shared AttentionPolicy, models
-├── ai/            ONNX analyzer and WordPiece tokenizer
+├── ai/            static-embedding analyzer and WordPiece tokenizer
 ├── service/       notification listener, reminder and retention workers
 ├── training/      local personalized classifier and export
 └── ui/

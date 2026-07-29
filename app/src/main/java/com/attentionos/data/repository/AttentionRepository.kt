@@ -2,7 +2,7 @@ package com.attentionos.data.repository
 
 import android.util.Log
 import com.attentionos.BuildConfig
-import com.attentionos.ai.MiniLmLanguageAnalyzer
+import com.attentionos.ai.StaticEmbeddingAnalyzer
 import com.attentionos.core.common.TimeConstants
 import com.attentionos.data.db.AttentionDao
 import com.attentionos.data.db.NotificationEventEntity
@@ -561,7 +561,7 @@ class AttentionRepository(
      * describe a different space and would poison the fit.
      */
     private suspend fun replaySamples(): List<TrainingSample> =
-        dao.correctedEvents(modelVersion = MiniLmLanguageAnalyzer.modelVersion())
+        dao.correctedEvents(modelVersion = StaticEmbeddingAnalyzer.modelVersion())
             .mapNotNull { event ->
                 val features = PersonalizedAttentionModel.features(
                     embedding = EmbeddingCodec.decode(event.embeddingQ8),

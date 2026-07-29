@@ -17,56 +17,39 @@ internal class WordPieceTokenizer(vocabulary: List<String>) {
 
     private val tokenIds: Map<String, Long>
     private val unknown: Long
-    private val classification: Long
-    private val separator: Long
 
     init {
-        require(vocabulary.isNotEmpty()) { "MiniLM vocabulary is empty" }
+        require(vocabulary.isNotEmpty()) { "Vocabulary is empty" }
 
         // `associate` keeps the LAST occurrence on collision, so a duplicated or blank line
         // would silently shift token ids and corrupt every embedding. Fail loudly instead.
         val seen = HashMap<String, Long>(vocabulary.size * 2)
         vocabulary.forEachIndexed { index, token ->
-            require(token.isNotEmpty()) { "MiniLM vocabulary has a blank entry at line ${index + 1}" }
+            require(token.isNotEmpty()) { "Vocabulary has a blank entry at line ${index + 1}" }
             val previous = seen.put(token, index.toLong())
             require(previous == null) {
-                "MiniLM vocabulary has duplicate token '$token' at lines ${previous!! + 1} and ${index + 1}"
+                "Vocabulary has duplicate token '$token' at lines ${previous!! + 1} and ${index + 1}"
             }
         }
         tokenIds = seen
 
-        unknown = requireNotNull(tokenIds[UNK]) { "MiniLM vocabulary is missing $UNK" }
-        classification = requireNotNull(tokenIds[CLS]) { "MiniLM vocabulary is missing $CLS" }
-        separator = requireNotNull(tokenIds[SEP]) { "MiniLM vocabulary is missing $SEP" }
+        unknown = requireNotNull(tokenIds[UNK]) { "Vocabulary is missing $UNK" }
     }
 
     /** Number of entries in the loaded vocabulary. Exposed for integrity assertions. */
     val vocabularySize: Int get() = tokenIds.size
 
     /**
-     * Encodes [text] as `[CLS] … [SEP]`, truncated to [maxTokens].
+     * Encodes [text] as bare token ids, with no `[CLS]`/`[SEP]`.
      *
-     * The returned arrays are sized to the actual token count rather than padded to
-     * [maxTokens]: the ONNX model declares a dynamic sequence axis, so a short notification
-     * costs a correspondingly short forward pass. Padding every input to 64 made an 8-token
-     * notification cost the same as a 64-token one.
+     * Static-embedding encoders pool per-token vectors directly, so the transformer's sentence
+     * markers would average in two vectors that mean nothing in that space.
      */
-    fun encode(text: String, maxTokens: Int): EncodedTokens {
-        require(maxTokens >= 2) { "maxTokens must leave room for [CLS] and [SEP]" }
+    fun encodePieces(text: String, maxTokens: Int): IntArray {
         val pieces = basicTokens(text)
             .flatMap(::wordPieces)
-            .take(maxTokens - 2)
-
-        val length = pieces.size + 2
-        val ids = LongArray(length)
-        val mask = LongArray(length) { 1L }
-
-        ids[0] = classification
-        pieces.forEachIndexed { index, piece ->
-            ids[index + 1] = tokenIds[piece] ?: unknown
-        }
-        ids[length - 1] = separator
-        return EncodedTokens(ids, mask)
+            .take(maxTokens)
+        return IntArray(pieces.size) { index -> (tokenIds[pieces[index]] ?: unknown).toInt() }
     }
 
     /**
@@ -86,7 +69,7 @@ internal class WordPieceTokenizer(vocabulary: List<String>) {
      *
      * Without this the word pattern groups a whole Chinese or Japanese sentence into a single
      * "word", WordPiece fails to segment it, and the entire notification collapses to
-     * `[CLS] [UNK] [SEP]` — i.e. every CJK notification embeds identically and carries no
+     * `[UNK]` alone — i.e. every CJK notification embeds identically and carries no
      * meaning at all.
      */
     private fun padCjk(text: String): String {
@@ -143,8 +126,6 @@ internal class WordPieceTokenizer(vocabulary: List<String>) {
 
     internal companion object {
         const val UNK = "[UNK]"
-        const val CLS = "[CLS]"
-        const val SEP = "[SEP]"
 
         /** HuggingFace uses this same cutoff before giving up on a token. */
         const val MAX_CHARS_PER_TOKEN = 100
@@ -154,16 +135,3 @@ internal class WordPieceTokenizer(vocabulary: List<String>) {
     }
 }
 
-internal data class EncodedTokens(val ids: LongArray, val mask: LongArray) {
-    val size: Int get() = ids.size
-
-    override fun equals(other: Any?): Boolean =
-        this === other ||
-            (
-                other is EncodedTokens &&
-                    ids.contentEquals(other.ids) &&
-                    mask.contentEquals(other.mask)
-                )
-
-    override fun hashCode(): Int = 31 * ids.contentHashCode() + mask.contentHashCode()
-}

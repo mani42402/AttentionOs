@@ -9,7 +9,7 @@ Android notification
 NotificationListenerService
         │ copies bounded fields
         ▼
-PriorityEngine ── MiniLM transformer (INT8, ONNX Runtime)
+PriorityEngine ── potion-base-8M static embeddings (INT8, memory-mapped)
         │             └── deterministic safety fallback
         ├── Personal logistic model (after activation gate)
         ▼
@@ -30,12 +30,12 @@ Explicit Important / Not important feedback overrides passive behavioral inferen
 updates sender memory and writes a high-confidence HIGH or LOW training label; notification opens
 and dismissals remain useful but lower-confidence implicit signals.
 
-Each model-backed decision carries MiniLM's 384-dimensional normalized embedding. The app stores it
-with the event and eventual training example using symmetric INT8 quantization (384 bytes rather
+Each model-backed decision carries a 256-dimensional normalized embedding. The app stores it
+with the event and eventual training example using symmetric INT8 quantization (256 bytes rather
 than 1,536 bytes as Float32). Exports include the Base64-encoded vector, encoding metadata, and exact
 language-model version so training jobs cannot silently mix incompatible feature spaces.
 
-The personalized classifier has 390 inputs: the frozen 384-dimensional MiniLM embedding, hour
+The personalized classifier has 262 inputs: the frozen 256-dimensional embedding, hour
 sine/cosine, sender importance, sender open rate, focus-mode state, and the safe engine's base
 score. A correction runs one bounded stochastic-gradient update and persists 390 Float32 weights
 (about 1.6 KB) plus a bias and class counts. No background training job, wake lock, or model
@@ -61,7 +61,7 @@ uniquely named periodic task per selected time, requires a non-low battery, and 
 shared silent low-importance channel. Updating the set cancels and rebuilds only tagged reminder
 work.
 
-## Why the MVP uses MiniLM instead of a generative LLM
+## Why the app embeds rather than generates
 
 A generative model creates unnecessary token-generation latency and memory pressure for a
 classification task. The MVP runs a real three-layer pretrained transformer that produces
@@ -108,7 +108,7 @@ app/src/main/java/com/attentionos/
 ├── data/settings/ DataStore-backed preferences
 ├── data/repository/ decision recording, feedback, hashing
 ├── domain/        priority engine, shared AttentionPolicy, models
-├── ai/            ONNX analyzer and WordPiece tokenizer
+├── ai/            static-embedding analyzer and WordPiece tokenizer
 ├── service/       notification listener, reminder and retention workers
 ├── training/      local personalized classifier and export
 └── ui/            theme, components, navigation, and one package per screen
@@ -143,15 +143,16 @@ Play consumes.
 
 | Artifact | Size |
 |---|---|
-| Release AAB (what Play ingests) | 25.4 MB |
-| Universal release APK (local only) | 46 MB |
-| `libonnxruntime.so` | 26.7 MB stored, 9.8 MB compressed |
-| MiniLM model asset | 16.7 MB |
+| Release AAB, excluding build metadata | 9.8 MB |
+| Universal release APK (local only) | 11.9 MB |
+| `potion-base-8m-q8.bin` | 7.3 MB stored, 6.5 MB compressed |
+| `libsqlcipher.so` | 2.0 MB stored |
 
-The ONNX Runtime native library is larger than the model it runs. That is the strongest argument
-for the static-embedding evaluation planned for the design phase: adopting a token-lookup model
-would remove the runtime entirely and shrink the model, taking the bundle to roughly a third of
-its current size.
+The encoder was `all-MiniLM-L6-v2` on ONNX Runtime until the Phase 2 bake-off. The runtime alone
+measured 26.7 MB — larger than the model it existed to run — and the pair accounted for 91% of
+the binary. Replacing both with a static token-lookup table took the download from 29.9 MB to
+9.8 MB and the install footprint from 53.3 MB to 11.9 MB, with no measurable quality loss on the
+labelled set. `docs/MODEL_STRATEGY.md` records both scorecards.
 
 ## Interface system
 

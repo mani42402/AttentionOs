@@ -38,7 +38,7 @@ class ExportManager(
                 writer.append("\"features\":").append(example.featuresJson).append(',')
                 writer.append("\"label\":\"").append(example.expectedPriority).append("\",")
                 writer.append("\"embedding_encoding\":\"int8_symmetric_127\",")
-                writer.append("\"embedding_dimensions\":384,")
+                writer.append("\"embedding_dimensions\":${EmbeddingCodec.EXPECTED_DIMENSIONS},")
                 writer.append("\"embedding_q8_base64\":")
                 if (example.embeddingQ8 == null) {
                     writer.append("null,")

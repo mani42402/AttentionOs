@@ -87,9 +87,9 @@ android {
     }
 
     androidResources {
-        // Keep the ONNX model uncompressed so it can be memory-mapped from the APK
+        // Keep the embedding table uncompressed so it can be memory-mapped from the APK
         // instead of being inflated into a second on-disk copy.
-        noCompress += "onnx"
+        noCompress += "bin"
     }
 
     packaging {
@@ -119,7 +119,6 @@ dependencies {
 
     implementation(libs.androidx.work.runtime.ktx)
     implementation(libs.androidx.datastore.preferences)
-    implementation(libs.onnxruntime.android)
     implementation(libs.sqlcipher.android)
 
     testImplementation(libs.junit)

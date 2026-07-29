@@ -2,7 +2,7 @@ package com.attentionos.core.di
 
 import android.app.Application
 import androidx.room.Room
-import com.attentionos.ai.MiniLmLanguageAnalyzer
+import com.attentionos.ai.StaticEmbeddingAnalyzer
 import com.attentionos.data.db.AttentionDatabase
 import com.attentionos.data.repository.AttentionRepository
 import com.attentionos.data.settings.AppSettings
@@ -102,8 +102,8 @@ class AppContainer(
         )
     }
 
-    private val languageAnalyzer: MiniLmLanguageAnalyzer by lazy {
-        MiniLmLanguageAnalyzer(application)
+    private val languageAnalyzer: StaticEmbeddingAnalyzer by lazy {
+        StaticEmbeddingAnalyzer(application)
     }
 
     val exportManager: ExportManager by lazy {

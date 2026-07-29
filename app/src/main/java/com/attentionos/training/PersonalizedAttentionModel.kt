@@ -35,7 +35,11 @@ object PersonalizedAttentionModel {
      *
      * v2: encoder moved from paraphrase-MiniLM-L3-v2 to all-MiniLM-L6-v2.
      */
-    const val MODEL_VERSION = 2
+    /**
+     * 3: the encoder moved from a 384-dimensional transformer to a 256-dimensional static
+     * table, so every stored weight vector describes a feature space that no longer exists.
+     */
+    const val MODEL_VERSION = 3
 
     fun features(
         embedding: FloatArray?,
@@ -48,13 +52,16 @@ object PersonalizedAttentionModel {
         if (embedding == null || embedding.size != EmbeddingCodec.EXPECTED_DIMENSIONS) return null
         val result = FloatArray(FEATURE_COUNT)
         embedding.copyInto(result)
+        // Context features follow the embedding. Indexed off the embedding width rather than
+        // written as literals, so a change of encoder cannot silently corrupt the tail.
+        val context = EmbeddingCodec.EXPECTED_DIMENSIONS
         val phase = 2.0 * PI * hourOfDay.coerceIn(0, 23) / 24.0
-        result[384] = sin(phase).toFloat()
-        result[385] = cos(phase).toFloat()
-        result[386] = senderImportance.coerceIn(0f, 1f) * 2f - 1f
-        result[387] = senderOpenRate.coerceIn(0f, 1f) * 2f - 1f
-        result[388] = if (focusModeEnabled) 1f else -1f
-        result[389] = baseScore.coerceIn(0f, 1f) * 2f - 1f
+        result[context] = sin(phase).toFloat()
+        result[context + 1] = cos(phase).toFloat()
+        result[context + 2] = senderImportance.coerceIn(0f, 1f) * 2f - 1f
+        result[context + 3] = senderOpenRate.coerceIn(0f, 1f) * 2f - 1f
+        result[context + 4] = if (focusModeEnabled) 1f else -1f
+        result[context + 5] = baseScore.coerceIn(0f, 1f) * 2f - 1f
         return result
     }
 
