@@ -201,7 +201,6 @@
     <string name="settings_learning">Learning</string>
     <string name="settings_learning_2">LEARNING</string>
     <string name="settings_learning_examples">Learning examples</string>
-    <string name="settings_match_the_system_palette_instead_of_the">Match the system palette instead of the app\'s own</string>
     <string name="settings_motion">MOTION</string>
     <string name="settings_motion_effects">Motion effects</string>
     <string name="settings_needs_notification_access">Needs notification access</string>
@@ -236,7 +235,6 @@
     <string name="settings_up_to_six_quiet_reminders_each_day">Up to six quiet reminders each day. Tap a time to remove it.</string>
     <string name="settings_urgent_alerts">Urgent alerts</string>
     <string name="settings_urgent_vibration">Urgent vibration</string>
-    <string name="settings_use_wallpaper_colours">Use wallpaper colours</string>
     <string name="settings_vibrate_for_important_alerts">Vibrate for important alerts</string>
     <string name="settings_vibrate_for_normal_priority_notifications">Vibrate for normal-priority notifications</string>
     <string name="settings_vibrate_for_urgent_alerts">Vibrate for urgent alerts</string>

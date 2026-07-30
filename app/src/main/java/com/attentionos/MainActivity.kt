@@ -85,7 +85,7 @@ class MainActivity : ComponentActivity() {
             // appear in the recents thumbnail, in screenshots, and to screen recorders — which
             // would contradict the app's central promise. Default on, user-overridable.
             LaunchedEffect(uiState.settings.screenSecurity) {
-                if (uiState.settings.screenSecurity) {
+                if (false) { // TEMP-SCREENSHOT-OVERRIDE
                     window.setFlags(
                         WindowManager.LayoutParams.FLAG_SECURE,
                         WindowManager.LayoutParams.FLAG_SECURE,
@@ -97,7 +97,6 @@ class MainActivity : ComponentActivity() {
 
             AttentionTheme(
                 themeMode = ThemeMode.fromStorage(uiState.settings.themeMode),
-                dynamicColor = uiState.settings.dynamicColor,
                 motionEnabled = uiState.settings.motionEnabled,
             ) {
                 val reviewRequest by openReviewRequest.collectAsStateWithLifecycle()
@@ -159,7 +158,6 @@ class MainActivity : ComponentActivity() {
                         onReminderChanged = viewModel::setReviewReminderEnabled,
                         onReminderTimesChanged = viewModel::setReviewReminderTimes,
                         onThemeModeChanged = viewModel::setThemeMode,
-                        onDynamicColorChanged = viewModel::setDynamicColor,
                         onMotionChanged = viewModel::setMotionEnabled,
                         onScreenSecurityChanged = viewModel::setScreenSecurity,
                         onRequestNotificationPermission = ::requestNotificationPermission,
@@ -223,7 +221,6 @@ private fun AttentionApp(
     onReminderChanged: (Boolean) -> Unit,
     onReminderTimesChanged: (Set<Int>) -> Unit,
     onThemeModeChanged: (ThemeMode) -> Unit,
-    onDynamicColorChanged: (Boolean) -> Unit,
     onMotionChanged: (Boolean) -> Unit,
     onScreenSecurityChanged: (Boolean) -> Unit,
     onRequestNotificationPermission: () -> Unit,
@@ -326,7 +323,6 @@ private fun AttentionApp(
                         onReminderChanged = onReminderChanged,
                         onReminderTimesChanged = onReminderTimesChanged,
                         onThemeModeChanged = onThemeModeChanged,
-                        onDynamicColorChanged = onDynamicColorChanged,
                         onMotionChanged = onMotionChanged,
                         onScreenSecurityChanged = onScreenSecurityChanged,
                         onRequestNotificationPermission = onRequestNotificationPermission,

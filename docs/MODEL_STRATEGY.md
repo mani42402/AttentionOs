@@ -144,6 +144,72 @@ measurable only against real correction histories, which do not exist until the 
 used. Shipping it now would mean rewriting the safety gates on the strength of a guess.
 
 
+## Measured against real notifications
+
+`RealWorldMultilingualTest` runs 59 notifications of the kind people actually receive — a mother
+asking about dinner, a partner waiting outside, a family message about a hospital, a bank OTP, a
+landlord about rent, school about a child — in English, Hindi, Urdu, Chinese and Spanish.
+
+```
+           n    unknown tokens   must-reach   quiet-right
+ENGLISH    18        0.5%           4/11          6/7
+HINDI      12        5.0%           3/8           4/4
+URDU       10        3.1%           3/7           3/3
+CHINESE    10       68.1%           3/7           3/3
+SPANISH     9        0.0%           1/6           3/3
+```
+
+"Must-reach" means a person would be upset to have missed it. Nothing is ever hidden — a MEDIUM
+or LOW notification still appears in the shade — so a miss means *delivered quietly instead of
+promptly*, which is the difference between the product working and not.
+
+### What this says
+
+**The classifier contributes almost nothing on real interpersonal messages.** English recall is
+4 of 11, and those four are exactly the ones a deterministic floor catches: the missed call, the
+OTP, the fraud alert, the alarm. Everything requiring comprehension lands low:
+
+```
+Family: "Dad is in the hospital, call me now"          -> MEDIUM (SOCIAL)
+Priya:  "I'm outside your office, come down"           -> MEDIUM (SOCIAL)
+Rahul (Manager): "Can you look at the outage before…"  -> LOW (WORK)
+Landlord: "Rent is overdue, please transfer today"     -> LOW (OTHER)
+School: "Aarav was marked absent today"                -> LOW (OTHER)
+```
+
+Earlier scorecards read 68–75% because their samples contained the urgency vocabulary the
+keyword rules were written against — "production down", "returning errors", "security alert".
+Real messages from real people do not.
+
+**The safety floors are English-only.** `securityWords` and `financeWords` are ASCII literals, so
+`ओटीपी`, `او ٹی پی`, `验证码` and `código de verificación` match nothing. A Hindi-, Urdu-,
+Chinese- or Spanish-speaking user's one-time password and fraud alert receive no protection at
+all. The only language-independent floors are the ones Android supplies as a `categoryHint`:
+calls and alarms. Those held in every language, and are the reason the non-English columns are
+not zero.
+
+**Hindi and Urdu look readable and are not.** At 3–5% unknown tokens they appear healthier than
+Chinese at 68%, but that is an artefact: WordPiece decomposes their words into the few Devanagari
+and Arabic characters the vocabulary happens to contain. Those character embeddings were
+distilled from English text, so the encoder returns confident nonsense rather than admitting it
+cannot read the input. Chinese failing loudly is the safer failure.
+
+### What would fix it, cheapest first
+
+1. **Language-independent security and finance floors.** A 4–8 digit code in a short body is a
+   one-time password in every language, and the sending package is known. This is the urgent one:
+   it is a safety gap, not a quality gap, and it does not need a new model.
+2. **Weight named-person conversations properly.** A message from a named contact in a messaging
+   app currently adds 0.08 to the score. That single number is why "Dad is in the hospital" reads
+   as social chatter. Language-independent and cheap.
+3. **The multilingual encoder** — `static-similarity-mrl-multilingual-v1` at 128d, 13.6 MB plus a
+   2.5 MB Rust tokenizer. Fixes the scripts properly, and is the only one of the three that
+   requires new weights.
+
+Personalization does not substitute for any of these. It needs a seven-day pilot and 50
+corrections before it may influence ranking, so a new user gets the uncorrected behaviour for at
+least a week.
+
 ## Ruled out
 
 Researched July 2026; revisit only if the underlying facts change.

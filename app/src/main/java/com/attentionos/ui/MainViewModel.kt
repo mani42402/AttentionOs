@@ -242,10 +242,6 @@ class MainViewModel(private val container: AppContainer) : ViewModel() {
         viewModelScope.launch { container.settingsRepository.setThemeMode(mode.name) }
     }
 
-    fun setDynamicColor(enabled: Boolean) {
-        viewModelScope.launch { container.settingsRepository.setDynamicColor(enabled) }
-    }
-
     fun setMotionEnabled(enabled: Boolean) {
         viewModelScope.launch { container.settingsRepository.setMotionEnabled(enabled) }
     }

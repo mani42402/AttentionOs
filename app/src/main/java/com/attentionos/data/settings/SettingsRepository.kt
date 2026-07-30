@@ -33,8 +33,6 @@ data class AppSettings(
     val reviewReminderTimes: Set<Int> = setOf(19 * 60),
     /** Stored name of a [com.attentionos.ui.theme.ThemeMode]; defaults to following the system. */
     val themeMode: String = "Dark",
-    /** Material You: adopt the wallpaper palette instead of the brand palette. */
-    val dynamicColor: Boolean = false,
     val motionEnabled: Boolean = true,
     /** When true the window is FLAG_SECURE: no screenshots, no recents thumbnail. */
     val screenSecurity: Boolean = true,
@@ -63,7 +61,6 @@ class SettingsRepository(private val context: Context) {
                 ?.takeIf(Set<Int>::isNotEmpty)
                 ?: setOf((values[REVIEW_REMINDER_HOUR] ?: 19) * 60),
             themeMode = values[THEME_MODE] ?: "Dark",
-            dynamicColor = values[DYNAMIC_COLOR] ?: false,
             motionEnabled = values[MOTION_ENABLED] ?: true,
             screenSecurity = values[SCREEN_SECURITY] ?: true,
             onboardingComplete = values[ONBOARDING_COMPLETE] ?: false,
@@ -86,7 +83,6 @@ class SettingsRepository(private val context: Context) {
         context.settingsDataStore.edit { it[THEME_MODE] = mode }
     }
 
-    suspend fun setDynamicColor(enabled: Boolean) = update(DYNAMIC_COLOR, enabled)
     suspend fun setMotionEnabled(enabled: Boolean) = update(MOTION_ENABLED, enabled)
 
     suspend fun setScreenSecurity(enabled: Boolean) = update(SCREEN_SECURITY, enabled)
@@ -146,7 +142,6 @@ class SettingsRepository(private val context: Context) {
         val REVIEW_REMINDER_HOUR = intPreferencesKey("review_reminder_hour")
         val REVIEW_REMINDER_TIMES = stringSetPreferencesKey("review_reminder_times")
         val THEME_MODE = stringPreferencesKey("theme_mode")
-        val DYNAMIC_COLOR = booleanPreferencesKey("dynamic_color")
         val MOTION_ENABLED = booleanPreferencesKey("motion_enabled")
         val SCREEN_SECURITY = booleanPreferencesKey("screen_security")
         val ONBOARDING_COMPLETE = booleanPreferencesKey("onboarding_complete")
