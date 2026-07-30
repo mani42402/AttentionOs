@@ -118,6 +118,37 @@ app/src/main/java/com/attentionos/
 set, and the queueing rule. These were previously duplicated between the scoring engine and the
 personalization policy, where divergence would silently change safety behaviour.
 
+## Decision pipeline (target — see docs/PLAN_RULES_FIRST.md)
+
+Strict order, first match wins, each stage overridable only from above.
+
+```
+1  User rules            person / app / phrase / time  ->  alert-on-silent, vibrate,
+                                                           mute, batch, snooze, auto-reply
+2  Safety floors         calls, alarms, verified security + finance   (nothing may lower these)
+3  Person signal         reply speed, open rate, interaction count    (may raise)
+4  App signal            engagement with that package                 (may raise)
+5  Message classifier    nearest of ~50 descriptions                  (ranks the remainder)
+6  Default               deliver untouched
+```
+
+The classifier is stage 5 rather than the whole decision, because it measures 48% on notifications
+unlike anything it was written for while a rule the user wrote is right every time. Its errors now
+land only on notifications no rule and no engagement history had an opinion about.
+
+Stages 1, 3 and 4 do not exist yet; the plan document tracks what does.
+
+### The invariant, restated
+
+The listener carried an absolute promise not to modify any source notification. Mute, snooze and
+batch break it, so it is replaced by a narrower promise that keeps the substance:
+
+> The app never hides a notification on its own judgement. It hides only what the user's own rule
+> tells it to, and every such action is logged, visible and reversible.
+
+Enforced structurally rather than by intention: the function that cancels a notification requires a
+rule id, so no inference path can reach it. Safety floors are un-mutable by any rule.
+
 ## Memory and CPU budget
 
 - No polling, wake lock, foreground service, or always-running model.
