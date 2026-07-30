@@ -55,6 +55,21 @@ object AttentionPolicy {
     const val CATEGORY_HINT_CALL = "call"
     const val CATEGORY_HINT_ALARM = "alarm"
 
+    /**
+     * A score standing in for a band, so stored history and the personal model keep a number.
+     *
+     * The engine classifies into bands now, but the database column, the JSONL export and the
+     * personal classifier's feature vector all predate that and read a float. Midpoints keep
+     * those consistent without reviving the weighted sum that produced them.
+     */
+    fun representativeScore(priority: AttentionPriority): Float = when (priority) {
+        AttentionPriority.CRITICAL -> 0.93f
+        AttentionPriority.HIGH -> 0.77f
+        AttentionPriority.MEDIUM -> 0.57f
+        AttentionPriority.LOW -> 0.35f
+        AttentionPriority.SILENT -> 0.12f
+    }
+
     fun priorityFor(score: Float): AttentionPriority = when {
         score >= CRITICAL_THRESHOLD -> AttentionPriority.CRITICAL
         score >= HIGH_THRESHOLD -> AttentionPriority.HIGH

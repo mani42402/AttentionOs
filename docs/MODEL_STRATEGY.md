@@ -1,3 +1,5 @@
+# On-device model strategy
+
 ## Current encoder
 
 `sentence-transformers/static-similarity-mrl-multilingual-v1`, Matryoshka-truncated to 128
@@ -123,111 +125,104 @@ measurable only against real correction histories, which do not exist until the 
 used. Shipping it now would mean rewriting the safety gates on the strength of a guess.
 
 
-## Measured against real notifications
+## How a notification is classified
 
-`RealWorldMultilingualTest` runs 59 notifications of the kind people actually receive — a mother
-asking about dinner, a partner waiting outside, a family message about a hospital, a bank OTP, a
-landlord about rent, school about a child — in English, Hindi, Urdu, Chinese and Spanish.
+The nearest description decides. Nothing is added up.
 
-```
-                     unknown tokens        must-reach
-                     before    after    before    after
-ENGLISH                0.5%     0.5%      4/11     6/11
-HINDI                  5.0%     0.0%      3/8      3/8
-URDU                   3.1%     0.0%      3/7      6/7
-CHINESE               68.1%     0.0%      3/7      5/7
-SPANISH                0.0%     0.0%      1/6      3/6
-                                        ------   ------
-TOTAL                                    14/39    23/39
-```
+`AttentionDescriptions` holds ~50 sentences describing *reasons a notification matters* — "a family
+member has been hurt and needs you", "money has left my account without my permission", "a shop is
+advertising a discount". Each names a band. At load the encoder embeds them once; each notification
+is then one embedding plus a few dozen dot products of 128 floats, and takes the band of whichever
+sentence it lands nearest.
 
-"Must-reach" means a person would be upset to have missed it. Nothing is ever hidden — a MEDIUM
-or LOW notification still appears in the shade — so a miss means *delivered quietly instead of
-promptly*. Safety floors held 102/102 under a 400-notification flood.
+Two things may adjust the result, and both may only **raise** it:
 
-### What is still wrong
+- **Deterministic safety floors** — a call, an alarm, or a keyword-confirmed security or finance
+  event. These are promises the product makes, so they rest on evidence rather than on a model
+  being right. The model's own nearest-category guess is deliberately *not* allowed to trigger one:
+  nearest-prototype always returns something, and letting a guess drive a floor promoted a third of
+  the corpus noise to HIGH.
+- **A sender the user actually engages with** — three or more interactions and a 70% open rate. Who
+  sent something outranks what it says, in any language, however novel the phrasing. It is the one
+  signal that can never be out-of-vocabulary, and it was previously worth 0.08 in a sum.
 
-Category accuracy on the 50-sample English set fell from 68% to 52%. Two changes are confounded
-there — the new embedding space and the removal of the cosine cutoff — and they have not been
-separated. The category is a hint feeding the score rather than a decision, the floors held, and
-must-reach recall rose sharply, so it was not treated as blocking. It is the obvious next
-measurement.
-
-Sixteen must-reach cases still miss. Some labels are arguable — a dinner invitation and a
-confirmed appointment are not obviously urgent — but three are not: a manager asking about an
-outage, a landlord about overdue rent, and a school reporting a child absent. Those are
-non-conversation, non-floor notifications where nothing but comprehension can carry them.
-
-The safety floors remain English keyword lists, so `ओटीपी`, `او ٹی پی` and `验证码` match
-nothing. The only language-independent floors are Android's own `categoryHint` for calls and
-alarms. A one-time code is 4–8 digits in every script and the sending package is known, so this
-needs no model — and a safety floor should not depend on one being right.
-
-## What the scoring architecture actually does
-
-The engine computes a hand-weighted sum and then compares it to four hand-chosen thresholds:
+### What this replaced
 
 ```
 score  = 0.28                              constant
-       + urgency        x 0.34             <- the only model output
+       + urgency          x 0.34           <- the only model output
        + senderImportance x 0.20           0.5 when the sender is unknown
        + senderOpenRate   x 0.10           0.5 when the sender is unknown
-       + 0.08 if the notification is a conversation
+       + 0.08 if a conversation
        + 0.28 SECURITY / 0.13 FINANCE / -0.32 PROMOTION
 priority = score >= 0.86 CRITICAL / 0.68 HIGH / 0.46 MEDIUM / 0.24 LOW
 ```
 
-The model contributes **one number in [0,1], weighted 0.34**, plus a category label. Everything
-else is a constant somebody chose. For a sender the app has never met, 0.43 of the score is fixed
-before any content is read.
+Nine tuned constants and four thresholds, with the model supplying one number weighted 0.34. For an
+unknown sender, 0.43 of the score was fixed before any content was read — which is why tuning a
+single constant once moved accuracy further than replacing the entire encoder did. All of it is
+gone.
 
-That is the wrong way round, and the evidence is that changing a single constant — removing the
-0.17 Attention Mode penalty — moved recall further than replacing the entire encoder did.
+### Why descriptions rather than a trained head
 
-### Measured on the full corpus
+A trained classifier needs labelled examples, and the only ones available are written by hand, so
+the head would learn that phrasing. Descriptions need no training data, so there is nothing to
+overfit to. They are matched in a multilingual space, so each is written **once**, in one language,
+and covers every language the encoder reads — a keyword list would need every phrasing in every
+language.
+
+They are also debuggable in a way a prompt is not. Add a sentence, re-run 225 cases, read exactly
+what moved. Two descriptions here were caught over-reaching that way: "a driver is at my door" was
+matching every "your order is 5 minutes away", and "asking me a direct question" was matching
+casual weekend plans. Narrowing both recovered 6 noise cases for 2 recall.
+
+### The bound
+
+The list enumerates *reasons to care*, not phrasings. New apps appear constantly; new reasons for a
+human to need something almost never. ~50 sentences cover 15 message kinds across 15 languages.
+
+That claim is falsifiable, and this is where it fails: if real users keep needing reasons not on the
+list, the space is not bounded and a model that can be instructed in prose is the better answer. The
+seam exists — `LanguageAnalyzer` is an interface and `EncoderAsset` is injectable — so a cascade
+sending only the ambiguous minority to a larger model is an implementation, not a rewrite.
+
+## Measured on the full corpus
 
 225 cases: 15 languages x 15 message kinds, including **Roman Urdu and Hinglish**, in
 `androidTest/assets/notification-corpus.json`.
 
 ```
-by message kind                        must-reach
-  bank_otp                               15/15   100%
-  bank_fraud                             15/15   100%
-  missed_call                            15/15   100%
-  partner_now                             9/15    60%
-  family_emergency                        8/15    53%
-  boss_urgent                             5/15    33%
-  landlord_rent                           4/15    27%
-  school_child                            0/15     0%
-                                        ------
-TOTAL must-reach                        71/120    59%
-quiet-right                             86/105    82%
+                          weighted sum      descriptions
+must-reach                  71/120  59%      110/120  92%
+noise correctly quiet       86/105  82%       85/105  81%
+
+by message kind                  before            after
+  family emergency            8/15  53%       15/15  100%
+  bank OTP                   15/15 100%       15/15  100%
+  bank fraud                 15/15 100%       15/15  100%
+  missed call                15/15 100%       15/15  100%
+  school: child absent        0/15   0%       15/15  100%
+  landlord: rent overdue      4/15  27%       14/15   93%
+  boss: urgent problem        5/15  33%       11/15   73%
+  partner: waiting outside    9/15  60%       10/15   67%
 ```
 
-The split is total and it is not about language. Every kind that a **deterministic floor** covers
-scores 100%. Every kind that requires **judging importance from content** scores between 0% and
-60%. A school telling a parent their child did not arrive at school reaches the user in **zero of
-fifteen languages**.
+Recall rose 33 points and noise rejection held. Per-language spread is 67-100% with Roman Urdu at
+88%, unknown tokens 0.0% everywhere. Median inference 1.4 ms, p99 2.9 ms; safety floors held
+102/102 under a 400-notification flood.
 
-By language the spread is narrow — 50% to 88%, with Roman Urdu at 63% *above* English at 50% — and
-unknown tokens are 0.0% everywhere. The encoder is not the limiting factor. The hand-weighted sum
-is.
+`school_child` going 0/15 to 15/15 is the clearest single result: nothing about the encoder changed
+between those two numbers, only what was allowed to decide.
 
-### The fix
+### What is still wrong
 
-Replace the weighted sum and the four thresholds with a small classifier trained over the
-embedding: 128 inputs to 5 priority levels is 645 learned parameters, about 2.6 KB. The rules that
-remain are the safety floors only — those are guarantees the product makes, not judgements, and
-they should not depend on a model being right.
+Category accuracy on the older 50-sample English set reads 52%, down from 68%. That set scores the
+*category label*, which is now a nearest-prototype guess with no cutoff and which no longer feeds
+any decision except through the deterministic floors. It should be retired or rewritten to score
+bands.
 
-That deletes the 0.28 base, the 0.34 urgency weight, the 0.30 of sender defaults, the 0.08
-conversation bonus, the category bonuses and all four thresholds. The learned personal model then
-fine-tunes a head that already knows something, instead of starting from zero behind a seven-day
-pilot.
-
-The risk to manage is that the corpus is written by hand, so a head trained on it can learn the
-phrasing rather than the meaning. Training must hold out **whole languages** and score on the
-unseen ones, which is a test the current architecture would fail outright.
+`partner_now` at 67% and `boss_urgent` at 73% are the weakest real kinds. Both are short messages
+whose urgency is contextual — "come down now" means something only if you agreed to meet.
 
 ## Ruled out
 

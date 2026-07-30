@@ -158,13 +158,27 @@ class CorpusEvaluationTest {
             "corpus must-reach recall fell below the recorded baseline: $totalReached/$totalMust",
             totalReached >= RECALL_BASELINE,
         )
+        // Recall is worthless if everything is promoted. Pinned together so a change has to keep
+        // both — raising recall by shouting at the user is not an improvement.
+        assertTrue(
+            "noise rejection fell below the recorded baseline: $totalQuietRight/$totalQuiet",
+            totalQuietRight >= QUIET_BASELINE,
+        )
     }
 
     private companion object {
         const val TAG = "AttentionCorpus"
         const val CORPUS_ASSET = "notification-corpus.json"
 
-        /** Measured 2026-07-30. Raise when the architecture improves; never relax. */
-        const val RECALL_BASELINE = 55
+        /**
+         * Measured 2026-07-30 after the descriptions replaced the weighted sum: 110/120.
+         * Was 71/120 when nine tuned constants and four thresholds decided.
+         *
+         * Raise when the architecture improves; never relax to make a change pass.
+         */
+        const val RECALL_BASELINE = 108
+
+        /** 85/105. Was 86/105 before, so recall rose 33 points without paying in noise. */
+        const val QUIET_BASELINE = 83
     }
 }

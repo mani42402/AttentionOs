@@ -24,39 +24,45 @@ class PriorityEngine(
         memory: UserMemory?,
     ): AttentionDecision {
         val analysis = languageAnalyzer.analyze(signal.title, signal.text, signal.packageName)
-        var score = 0.28f
 
-        score += analysis.urgency * 0.34f
-        score += (memory?.importanceScore ?: 0.5f) * 0.20f
-        score += (memory?.openRate ?: 0.5f) * 0.10f
-        if (signal.isConversation) score += 0.08f
-        if (analysis.category == NotificationCategory.SECURITY) score += 0.28f
-        if (analysis.category == NotificationCategory.FINANCE) score += 0.13f
-        if (analysis.category == NotificationCategory.PROMOTION) score -= 0.32f
-        if (signal.isOngoing) score -= 0.18f
-
-        val quietHours = context.hourOfDay < QUIET_HOURS_END || context.hourOfDay >= QUIET_HOURS_START
         val isCall = signal.categoryHint == AttentionPolicy.CATEGORY_HINT_CALL
         val isAlarm = signal.categoryHint == AttentionPolicy.CATEGORY_HINT_ALARM
         val hasStrongUrgency =
             analysis.urgency >= AttentionPolicy.STRONG_URGENCY_THRESHOLD || isCall || isAlarm
-        if (
-            quietHours &&
-            !hasStrongUrgency &&
-            analysis.category !in AttentionPolicy.neverSuppressCategories
+
+        // The nearest description decides. Everything after this point may only *raise* the
+        // result — the deterministic floors because they are promises, and a sender the user
+        // actually engages with because who sent something outranks what it says.
+        var priority = analysis.band?.priority ?: AttentionPolicy.priorityFor(fallbackScore(analysis, memory, signal))
+
+        // Who this is to the user. A person whose messages get opened matters whatever the words
+        // are, in any language, however novel the phrasing — the one signal that needs no
+        // description and cannot be out-of-vocabulary. It was previously worth 0.08 in a sum.
+        if (memory != null && memory.interactionCount >= KNOWN_SENDER_INTERACTIONS &&
+            memory.openRate >= KNOWN_SENDER_OPEN_RATE
         ) {
-            score -= 0.10f
+            priority = priority.raisedByOneBand()
         }
 
-        // Hard floors are independent of model confidence and user history.
-        score = when {
-            isCall -> maxOf(score, 0.90f)
-            analysis.category == NotificationCategory.SECURITY -> maxOf(score, 0.88f)
-            isAlarm -> maxOf(score, 0.78f)
-            analysis.category == NotificationCategory.FINANCE -> maxOf(score, 0.70f)
-            else -> score
-        }.coerceIn(0f, 1f)
-        val priority = AttentionPolicy.priorityFor(score)
+        // Hard floors, independent of the model and of user history.
+        priority = when {
+            isCall -> AttentionPriority.CRITICAL
+            analysis.deterministicCategory == NotificationCategory.SECURITY ->
+                AttentionPriority.CRITICAL
+            isAlarm -> maxPriority(priority, AttentionPriority.HIGH)
+            analysis.deterministicCategory == NotificationCategory.FINANCE ->
+                maxPriority(priority, AttentionPriority.HIGH)
+            else -> priority
+        }
+
+        // An ongoing notification is a progress bar, not an event.
+        if (signal.isOngoing && !hasStrongUrgency &&
+            analysis.category !in AttentionPolicy.neverSuppressCategories
+        ) {
+            priority = priority.loweredByOneBand()
+        }
+
+        val score = AttentionPolicy.representativeScore(priority)
         val shouldQueue = AttentionPolicy.shouldQueue(context.focusModeEnabled, priority)
 
         return AttentionDecision(
@@ -69,6 +75,34 @@ class PriorityEngine(
             languageModelVersion = analysis.modelVersion,
             semanticUrgency = analysis.urgency,
         )
+    }
+
+    /** One band more prominent, saturating at the top. */
+    private fun AttentionPriority.raisedByOneBand(): AttentionPriority =
+        AttentionPriority.entries[(ordinal - 1).coerceAtLeast(0)]
+
+    /** One band quieter, saturating at the bottom. */
+    private fun AttentionPriority.loweredByOneBand(): AttentionPriority =
+        AttentionPriority.entries[(ordinal + 1).coerceAtMost(AttentionPriority.entries.lastIndex)]
+
+    private fun maxPriority(a: AttentionPriority, b: AttentionPriority): AttentionPriority =
+        if (a.ordinal <= b.ordinal) a else b
+
+    /**
+     * Used only when no model ran — a corrupt asset, or the keyword analyzer standing alone.
+     *
+     * Deliberately crude. It exists so the app still ranks something rather than treating every
+     * notification identically, and it is not the path any real decision takes.
+     */
+    private fun fallbackScore(
+        analysis: LanguageAnalysis,
+        memory: UserMemory?,
+        signal: NotificationSignal,
+    ): Float {
+        var score = 0.30f + analysis.urgency * 0.45f
+        if (signal.isConversation) score += 0.10f
+        memory?.let { score += (it.importanceScore - 0.5f) * 0.20f }
+        return score.coerceIn(0f, 1f)
     }
 
     private fun explanationFor(
@@ -92,6 +126,15 @@ class PriorityEngine(
     }
 
     private companion object {
+        /**
+         * What counts as a sender the user actually engages with.
+         *
+         * Three interactions is enough to distinguish a person from an app, and a 70% open rate
+         * says the user reads them. Below that the app has no evidence and does not guess.
+         */
+        const val KNOWN_SENDER_INTERACTIONS = 3
+        const val KNOWN_SENDER_OPEN_RATE = 0.7f
+
         /** Quiet hours run from [QUIET_HOURS_START] until [QUIET_HOURS_END] local time. */
         const val QUIET_HOURS_START = 23
         const val QUIET_HOURS_END = 7
@@ -107,6 +150,24 @@ data class LanguageAnalysis(
     val category: NotificationCategory,
     val semanticEmbedding: FloatArray? = null,
     val modelVersion: String? = null,
+    /**
+     * The band the nearest description argues for, or null when no model ran.
+     *
+     * This is the decision. When it is present the engine uses it directly instead of adding up
+     * weighted terms; [urgency] survives only because the safety-floor check and the stored
+     * history both read it.
+     */
+    val band: AttentionDescriptions.Band? = null,
+    /**
+     * Category established by deterministic rules, as opposed to [category] which may be the
+     * model's nearest guess.
+     *
+     * Only this one may trigger a safety floor. Nearest-prototype always returns *something*, and
+     * two categories carry hard floors, so letting a guess drive them promoted a third of the
+     * noise in the corpus to HIGH — a delivery update matching the finance prototype better than
+     * anything else was enough. A floor is a guarantee and has to rest on evidence.
+     */
+    val deterministicCategory: NotificationCategory? = null,
 )
 
 class KeywordLanguageAnalyzer : LanguageAnalyzer {
@@ -148,7 +209,12 @@ class KeywordLanguageAnalyzer : LanguageAnalyzer {
                 )
         if (strongActionPhrase || productionIncident) urgency = maxOf(urgency, 0.82f)
 
-        return LanguageAnalysis(urgency.coerceIn(0f, 1f), category)
+        // A keyword match is evidence, not a guess, so it is allowed to carry a safety floor.
+        return LanguageAnalysis(
+            urgency = urgency.coerceIn(0f, 1f),
+            category = category,
+            deterministicCategory = category,
+        )
     }
 
     private companion object {

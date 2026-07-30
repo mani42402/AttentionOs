@@ -5,6 +5,7 @@ import android.os.SystemClock
 import android.util.Log
 import android.util.LruCache
 import com.attentionos.BuildConfig
+import com.attentionos.domain.AttentionDescriptions
 import com.attentionos.domain.KeywordLanguageAnalyzer
 import com.attentionos.domain.LanguageAnalysis
 import com.attentionos.domain.LanguageAnalyzer
@@ -94,16 +95,42 @@ class StaticEmbeddingAnalyzer(
                     categoryMatch = category
                 }
             }
-            val urgentSimilarity = cosineOf(embedding, active.urgentEmbedding)
-            val routineSimilarity = cosineOf(embedding, active.routineEmbedding)
-            val semanticUrgency = (
-                0.45f + (urgentSimilarity - routineSimilarity) * URGENCY_SPREAD
-                ).coerceIn(0f, 1f)
+            // The nearest description wins outright. No threshold, no weighted sum: whichever
+            // sentence in AttentionDescriptions this notification is closest to names its band.
+            var bestBand = AttentionDescriptions.Band.WORTH_KNOWING
+            var bestScore = -2f
+            var runnerUp = -2f
+            active.descriptionEmbeddings.forEach { (band, vectors) ->
+                var bandBest = -2f
+                vectors.forEach { vector ->
+                    val score = cosineOf(embedding, vector)
+                    if (score > bandBest) bandBest = score
+                }
+                if (bandBest > bestScore) {
+                    runnerUp = bestScore
+                    bestScore = bandBest
+                    bestBand = band
+                } else if (bandBest > runnerUp) {
+                    runnerUp = bandBest
+                }
+            }
+
+            // Urgency is no longer the decision; it is retained because the safety-floor check
+            // and the stored history both read a float. Derived from the winning band plus how
+            // clearly it won, so a confident REACH_NOW reads higher than a marginal one.
+            val margin = (bestScore - runnerUp).coerceIn(0f, 0.5f)
+            val semanticUrgency = when (bestBand) {
+                AttentionDescriptions.Band.REACH_NOW -> 0.72f + margin
+                AttentionDescriptions.Band.WORTH_KNOWING -> 0.48f + margin * 0.4f
+                AttentionDescriptions.Band.CAN_WAIT -> 0.28f
+                AttentionDescriptions.Band.NOISE -> 0.10f
+            }.coerceIn(0f, 1f)
 
             SemanticResult(
                 embedding = embedding,
                 category = categoryMatch,
                 urgency = semanticUrgency,
+                band = bestBand,
             ).also {
                 if (BuildConfig.DEBUG) {
                     Log.d(
@@ -127,12 +154,17 @@ class StaticEmbeddingAnalyzer(
         category = semantic.category ?: fallbackResult.category,
         semanticEmbedding = semantic.embedding,
         modelVersion = asset.version,
+        band = semantic.band,
+        // Carried through from the keyword pass. The model's own nearest-prototype guess is not
+        // allowed to trigger a floor.
+        deterministicCategory = fallbackResult.deterministicCategory,
     )
 
     private class SemanticResult(
         val embedding: FloatArray,
         val category: NotificationCategory?,
         val urgency: Float,
+        val band: AttentionDescriptions.Band,
     )
 
     private fun state(): RuntimeState? {
@@ -173,10 +205,10 @@ class StaticEmbeddingAnalyzer(
         val tokenizer = WordPieceTokenizer(vocabulary)
 
         val state = RuntimeState(tokenizer, table)
-        // Prototypes are embedded once at load. These are the sentences the transformer
-        // encoder used too, so the bake-off compared like with like.
-        state.urgentEmbedding = state.embed(URGENT_PROTOTYPE)!!
-        state.routineEmbedding = state.embed(ROUTINE_PROTOTYPE)!!
+        // Descriptions and category prototypes are embedded once at load, so a notification
+        // costs one embedding plus a few dozen dot products of 128 floats.
+        state.descriptionEmbeddings = AttentionDescriptions.byBand
+            .mapValues { (_, texts) -> texts.mapNotNull { state.embed(it) } }
         state.categoryEmbeddings = categoryPrototypes
             .mapValues { (_, prompt) -> state.embed(prompt)!! }
 
@@ -241,8 +273,7 @@ class StaticEmbeddingAnalyzer(
         private val tokenizer: WordPieceTokenizer,
         private val table: QuantizedTable,
     ) {
-        lateinit var urgentEmbedding: FloatArray
-        lateinit var routineEmbedding: FloatArray
+        lateinit var descriptionEmbeddings: Map<AttentionDescriptions.Band, List<FloatArray>>
         lateinit var categoryEmbeddings: Map<NotificationCategory, FloatArray>
 
         /**

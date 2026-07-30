@@ -291,9 +291,10 @@ class RealWorldMultilingualTest {
         /**
          * Measured on 2026-07-30, and the number this test exists to protect.
          *
-         * 6 of 11. See `docs/MODEL_STRATEGY.md` for what is still missing and why.
+         * 8 of 11 once the descriptions replaced the weighted sum. It was 4 of 11 when nine
+         * tuned constants decided, and 6 of 11 with the multilingual encoder alone.
          */
-        const val ENGLISH_RECALL_BASELINE = 6
+        const val ENGLISH_RECALL_BASELINE = 8
 
         val CASES = listOf(
             // ---------- English ----------
