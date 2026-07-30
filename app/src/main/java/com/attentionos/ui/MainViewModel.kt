@@ -7,6 +7,7 @@ import com.attentionos.core.common.TimeConstants
 import com.attentionos.core.di.AppContainer
 import com.attentionos.data.db.NotificationListItem
 import com.attentionos.data.repository.AttentionTestResult
+import com.attentionos.data.repository.StorageSummary
 import com.attentionos.data.repository.UserAction
 import com.attentionos.data.settings.AppSettings
 import com.attentionos.training.ExportResult
@@ -176,6 +177,18 @@ class MainViewModel(private val container: AppContainer) : ViewModel() {
         initialValue = MainUiState(),
     )
 
+    /**
+     * What the app is storing, for Settings. Cold until observed, so the counts cost nothing
+     * unless the user opens the dashboard.
+     */
+    val storage: StateFlow<StorageSummary> = container.attentionRepository
+        .storageSummary(container::databaseBytes)
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5_000),
+            initialValue = StorageSummary(),
+        )
+
     val events = MutableSharedFlow<UiEvent>(extraBufferCapacity = 1)
 
     fun setFocusMode(enabled: Boolean) {
@@ -232,6 +245,15 @@ class MainViewModel(private val container: AppContainer) : ViewModel() {
         viewModelScope.launch { container.settingsRepository.setMotionEnabled(enabled) }
     }
 
+    fun setScreenSecurity(enabled: Boolean) {
+        viewModelScope.launch { container.settingsRepository.setScreenSecurity(enabled) }
+    }
+
+    /** Called once the share sheet has actually been handed the file. */
+    fun confirmExported(ids: List<Long>) {
+        viewModelScope.launch(Dispatchers.IO) { container.exportManager.confirmExported(ids) }
+    }
+
     fun completeOnboarding() {
         viewModelScope.launch { container.settingsRepository.completeOnboarding() }
     }
@@ -255,7 +277,7 @@ class MainViewModel(private val container: AppContainer) : ViewModel() {
 
     fun deleteAllData() {
         viewModelScope.launch(Dispatchers.IO) {
-            container.attentionRepository.deleteAllUserData()
+            container.panicWipe()
             events.emit(UiEvent.DataDeleted)
         }
     }

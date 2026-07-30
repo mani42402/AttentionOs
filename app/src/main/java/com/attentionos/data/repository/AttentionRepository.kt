@@ -2,6 +2,7 @@ package com.attentionos.data.repository
 
 import android.util.Log
 import com.attentionos.BuildConfig
+import com.attentionos.ai.MiniLmLanguageAnalyzer
 import com.attentionos.core.common.TimeConstants
 import com.attentionos.data.db.AttentionDao
 import com.attentionos.data.db.NotificationEventEntity
@@ -18,16 +19,21 @@ import com.attentionos.domain.NotificationCategory
 import com.attentionos.domain.NotificationSignal
 import com.attentionos.domain.PriorityEngine
 import com.attentionos.domain.UserMemory
+import com.attentionos.security.SenderHasher
+import com.attentionos.security.SenderIdentity
+import com.attentionos.training.Centroids
 import com.attentionos.training.EmbeddingCodec
 import com.attentionos.training.ModelWeightsCodec
 import com.attentionos.training.PersonalizedAttentionModel
 import com.attentionos.training.PersonalizedDecisionPolicy
 import com.attentionos.training.PersonalizedModelProgress
 import com.attentionos.training.PersonalizedModelState
+import com.attentionos.training.TrainingSample
 import java.time.Instant
 import java.time.ZoneId
 import kotlin.math.roundToLong
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -35,10 +41,12 @@ import kotlinx.coroutines.sync.withLock
 class AttentionRepository(
     private val dao: AttentionDao,
     private val priorityEngine: PriorityEngine,
+    private val senderHasher: SenderHasher,
 ) {
     private val modelMutex = Mutex()
     private var modelLoaded = false
     private var cachedModel: PersonalizedModelState? = null
+    private var cachedCentroids: Centroids? = null
 
     fun recentEvents(): Flow<List<NotificationListItem>> = dao.observeRecent()
     fun importantEvents(): Flow<List<NotificationEventEntity>> = dao.observeImportant()
@@ -47,6 +55,28 @@ class AttentionRepository(
     fun importantSince(since: Long): Flow<Int> = dao.observeImportantSince(since)
     fun queuedSince(since: Long): Flow<Int> = dao.observeQueuedSince(since)
     fun trainingCount(): Flow<Int> = dao.observeTrainingCount()
+
+    /**
+     * What is actually on disk right now, for the privacy dashboard.
+     *
+     * The app asks users to trust a claim about local storage; this lets them check it instead.
+     */
+    fun storageSummary(databaseBytes: () -> Long): Flow<StorageSummary> = combine(
+        dao.observeEventCount(),
+        dao.observeSenderCount(),
+        dao.observeTrainingCount(),
+        dao.observeStoredContentCount(),
+        dao.observeOldestEventAt(),
+    ) { events, senders, training, withContent, oldest ->
+        StorageSummary(
+            notificationCount = events,
+            senderCount = senders,
+            trainingExampleCount = training,
+            storedContentCount = withContent,
+            oldestEventAt = oldest?.takeIf { it > 0 },
+            databaseBytes = databaseBytes(),
+        )
+    }
     /** Average inference latency over the recent window shown in the UI. */
     fun averageAnalysisMillis(): Flow<Double?> = dao.observeAverageAnalysisMillis(
         since = System.currentTimeMillis() - LATENCY_WINDOW_MILLIS,
@@ -114,8 +144,14 @@ class AttentionRepository(
         signal: NotificationSignal,
         settings: AppSettings,
     ): AttentionDecision {
-        val senderIdentity = "${signal.packageName}:${signal.title.orEmpty()}"
-        val senderHash = stableHash(senderIdentity)
+        val senderHash = senderHasher.hash(
+            signal.conversationId ?: SenderIdentity.of(
+                packageName = signal.packageName,
+                personKey = null,
+                shortcutId = null,
+                title = signal.title,
+            ),
+        )
         val memoryEntity = dao.memory(senderHash)
         val memory = memoryEntity?.toDomain()
         val hour = Instant.ofEpochMilli(signal.postedAt)
@@ -292,10 +328,22 @@ class AttentionRepository(
         }
     }
 
+    /**
+     * Applies the user's retention setting to every table that accumulates personal data.
+     *
+     * Previously this pruned events and *exported* training rows only, so unexported examples
+     * and all sender memory grew without bound no matter what retention the user chose — the
+     * setting quietly did not mean what it said. Hard caps bound the worst case even when a
+     * device has not been idle enough for this job to run recently.
+     */
     suspend fun prune(retentionDays: Int) {
-        val before = System.currentTimeMillis() - retentionDays * TimeConstants.DAY_MILLIS
+        val now = System.currentTimeMillis()
+        val before = now - retentionDays * TimeConstants.DAY_MILLIS
         dao.deleteEventsBefore(before)
-        dao.deleteExportedTrainingBefore(before)
+        dao.deleteTrainingBefore(before)
+        dao.trimTrainingTo(MAX_TRAINING_ROWS)
+        dao.deleteMemoryBefore(now - MEMORY_RETENTION_MILLIS)
+        dao.trimMemoryTo(MAX_MEMORY_ROWS)
     }
 
     suspend fun exportableTraining(): List<TrainingExampleEntity> = dao.trainingForExport()
@@ -357,8 +405,30 @@ class AttentionRepository(
             focusModeEnabled = context.focusModeEnabled,
             baseScore = base.score,
         ) ?: return PersonalizationOutcome(base, null, false)
-        val probability = PersonalizedAttentionModel.predict(state, features)
-        if (!state.isActive || !allowActivation) {
+        val logisticProbability = PersonalizedAttentionModel.predict(state, features)
+
+        // Before the classifier has enough data, class centroids carry the signal: a
+        // nearest-class-mean is stable from a handful of corrections where logistic regression
+        // is still noise. Without this the personal model stays inert until 50 corrections plus
+        // the evaluation gates, a bar most users never reach — so "it learns from you" never
+        // became true for them.
+        val centroids = loadCentroids()
+        val prototypeProbability = base.semanticEmbedding
+            ?.takeIf { centroids != null }
+            ?.let { PersonalizedAttentionModel.prototypeScore(it, centroids!!) }
+
+        val probability = blendProbability(
+            logistic = logisticProbability,
+            prototype = prototypeProbability,
+            exampleCount = state.exampleCount,
+        )
+
+        // Centroids widen *when* personalization can help, never *whether* it is allowed to.
+        // The pilot period and the evaluation gates still hold: nothing here may influence a
+        // decision before the shadow period completes.
+        val usable = allowActivation &&
+            (state.isActive || (prototypeProbability != null && state.hasPrototypeEvidence))
+        if (!usable) {
             return PersonalizationOutcome(base, probability, false)
         }
         val safetyProtected = isSafetyProtected(base, signal)
@@ -375,6 +445,44 @@ class AttentionRepository(
         )
     }
 
+    /**
+     * Weighted blend of the two personal signals.
+     *
+     * Centroids dominate while examples are scarce and hand over to the classifier as it earns
+     * its keep, so the transition is gradual rather than a step change in behaviour.
+     */
+    private fun blendProbability(
+        logistic: Float,
+        prototype: Float?,
+        exampleCount: Int,
+    ): Float {
+        if (prototype == null) return logistic
+        val logisticShare = (
+            exampleCount.toFloat() / PersonalizedAttentionModel.MIN_EXAMPLES
+            ).coerceIn(0f, 1f)
+        return logistic * logisticShare + prototype * (1f - logisticShare)
+    }
+
+    private suspend fun loadCentroids(): Centroids? =
+        modelMutex.withLock {
+            if (!modelLoaded) {
+                cachedModel = dao.personalizedModel()?.toState()
+                modelLoaded = true
+            }
+            if (cachedCentroids == null) {
+                cachedCentroids = dao.personalizedModel()?.let { entity ->
+                    val important = ModelWeightsCodec.decodeVector(entity.importantCentroid)
+                    val notImportant = ModelWeightsCodec.decodeVector(entity.notImportantCentroid)
+                    if (important != null && notImportant != null) {
+                        Centroids(important, notImportant)
+                    } else {
+                        null
+                    }
+                }
+            }
+            cachedCentroids
+        }
+
     private suspend fun loadPersonalizedModel(): PersonalizedModelState? =
         modelMutex.withLock {
             if (!modelLoaded) {
@@ -384,6 +492,15 @@ class AttentionRepository(
             cachedModel
         }
 
+    /**
+     * Refits the personal model over every stored correction.
+     *
+     * Replaces a single gradient step per correction. The embeddings are already persisted, so
+     * the whole set can be re-fit each time: it removes the order-dependence and systematic
+     * underfitting of one-pass online learning, and at a few thousand examples it costs
+     * milliseconds. Evaluation counters are still advanced incrementally, because a shadow
+     * prediction is only meaningful against the model that existed when it was made.
+     */
     private suspend fun updatePersonalizedModel(
         event: NotificationEventEntity,
         important: Boolean,
@@ -403,25 +520,59 @@ class AttentionRepository(
                 cachedModel = dao.personalizedModel()?.toState()
                 modelLoaded = true
             }
-            val updated = PersonalizedAttentionModel.update(
+
+            // Advance the shadow-evaluation counters against the pre-update model first: this
+            // records how the model that made the prediction actually performed, which is the
+            // whole point of the gate.
+            val withCounters = PersonalizedAttentionModel.update(
                 current = cachedModel,
                 features = features,
                 important = important,
                 predictionBeforeUpdate = event.personalProbability,
                 baselineWasImportant = event.baseScoreAtDecision >= HIGH_PRIORITY_THRESHOLD,
             )
-            dao.upsertPersonalizedModel(updated.toEntity(updatedAt))
-            cachedModel = updated
+
+            val samples = replaySamples()
+            val refitted = if (samples.size >= MIN_REFIT_SAMPLES) {
+                PersonalizedAttentionModel.refit(samples, counters = withCounters)
+            } else {
+                withCounters
+            }
+            val centroids = PersonalizedAttentionModel.centroids(samples)
+
+            dao.upsertPersonalizedModel(refitted.toEntity(updatedAt, centroids))
+            cachedModel = refitted
+            cachedCentroids = centroids
             if (BuildConfig.DEBUG) {
                 Log.d(
                     "AttentionTraining",
-                    "Personal model updated: examples=${updated.exampleCount}, " +
-                        "positive=${updated.positiveCount}, negative=${updated.negativeCount}, " +
-                        "active=${updated.isActive}",
+                    "Personal model refit: samples=${samples.size}, " +
+                        "positive=${refitted.positiveCount}, negative=${refitted.negativeCount}, " +
+                        "centroids=${centroids != null}, active=${refitted.isActive}",
                 )
             }
         }
     }
+
+    /**
+     * Rebuilds the training set from corrected events.
+     *
+     * Only events embedded by the current encoder are included; a previous encoder's vectors
+     * describe a different space and would poison the fit.
+     */
+    private suspend fun replaySamples(): List<TrainingSample> =
+        dao.correctedEvents(modelVersion = MiniLmLanguageAnalyzer.modelVersion())
+            .mapNotNull { event ->
+                val features = PersonalizedAttentionModel.features(
+                    embedding = EmbeddingCodec.decode(event.embeddingQ8),
+                    hourOfDay = event.contextHour,
+                    senderImportance = event.senderImportanceAtDecision,
+                    senderOpenRate = event.senderOpenRateAtDecision,
+                    focusModeEnabled = event.focusModeAtDecision,
+                    baseScore = event.baseScoreAtDecision,
+                ) ?: return@mapNotNull null
+                TrainingSample(features, event.action == UserAction.IMPORTANT.name)
+            }
 
     private fun PersonalizedModelEntity.toState(): PersonalizedModelState? {
         if (version != PersonalizedAttentionModel.MODEL_VERSION) return null
@@ -441,7 +592,10 @@ class AttentionRepository(
         )
     }
 
-    private fun PersonalizedModelState.toEntity(updatedAt: Long): PersonalizedModelEntity =
+    private fun PersonalizedModelState.toEntity(
+        updatedAt: Long,
+        centroids: Centroids? = null,
+    ): PersonalizedModelEntity =
         PersonalizedModelEntity(
             weights = ModelWeightsCodec.encode(weights),
             bias = bias,
@@ -456,6 +610,10 @@ class AttentionRepository(
             importantCorrectCount = importantCorrectCount,
             notImportantEvaluationCount = notImportantEvaluationCount,
             falseImportantCount = falseImportantCount,
+            importantCentroid = centroids?.let { ModelWeightsCodec.encodeVector(it.important) },
+            notImportantCentroid = centroids?.let {
+                ModelWeightsCodec.encodeVector(it.notImportant)
+            },
         )
 
     private fun isSafetyProtected(
@@ -487,7 +645,18 @@ class AttentionRepository(
 
     private companion object {
         const val HIGH_PRIORITY_THRESHOLD = 0.68f
+
+        /**
+         * Below this the set is too small for a refit to beat a single step, and the cost of
+         * loading it is pure overhead.
+         */
+        const val MIN_REFIT_SAMPLES = 4
         const val LATENCY_WINDOW_MILLIS = 7L * TimeConstants.DAY_MILLIS
+
+        /** Sender memory outlives events so learned importance survives a short retention. */
+        const val MEMORY_RETENTION_MILLIS = 180L * TimeConstants.DAY_MILLIS
+        const val MAX_TRAINING_ROWS = 5_000
+        const val MAX_MEMORY_ROWS = 2_000
 
         val testScenarios = listOf(
             TestScenario(
@@ -564,3 +733,14 @@ enum class UserAction {
     IMPORTANT,
     NOT_IMPORTANT,
 }
+
+/** A plain-language snapshot of everything the app is storing locally. */
+data class StorageSummary(
+    val notificationCount: Int = 0,
+    val senderCount: Int = 0,
+    val trainingExampleCount: Int = 0,
+    /** Rows that hold actual notification text; zero unless the user opted in. */
+    val storedContentCount: Int = 0,
+    val oldestEventAt: Long? = null,
+    val databaseBytes: Long = 0,
+)

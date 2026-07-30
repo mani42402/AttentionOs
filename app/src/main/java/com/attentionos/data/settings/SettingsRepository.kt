@@ -32,6 +32,8 @@ data class AppSettings(
     val reviewReminderTimes: Set<Int> = setOf(19 * 60),
     val darkTheme: Boolean = false,
     val motionEnabled: Boolean = true,
+    /** When true the window is FLAG_SECURE: no screenshots, no recents thumbnail. */
+    val screenSecurity: Boolean = true,
     val onboardingComplete: Boolean = false,
     val pilotStartedAt: Long = 0L,
 )
@@ -58,6 +60,7 @@ class SettingsRepository(private val context: Context) {
                 ?: setOf((values[REVIEW_REMINDER_HOUR] ?: 19) * 60),
             darkTheme = values[DARK_THEME] ?: false,
             motionEnabled = values[MOTION_ENABLED] ?: true,
+            screenSecurity = values[SCREEN_SECURITY] ?: true,
             onboardingComplete = values[ONBOARDING_COMPLETE] ?: false,
             pilotStartedAt = values[PILOT_STARTED_AT] ?: 0L,
         )
@@ -76,6 +79,8 @@ class SettingsRepository(private val context: Context) {
         update(REVIEW_REMINDER_ENABLED, enabled)
     suspend fun setDarkTheme(enabled: Boolean) = update(DARK_THEME, enabled)
     suspend fun setMotionEnabled(enabled: Boolean) = update(MOTION_ENABLED, enabled)
+
+    suspend fun setScreenSecurity(enabled: Boolean) = update(SCREEN_SECURITY, enabled)
 
     suspend fun setReviewReminderTimes(times: Set<Int>) {
         val normalized = times
@@ -108,6 +113,11 @@ class SettingsRepository(private val context: Context) {
         context.settingsDataStore.edit { it[RETENTION_DAYS] = days.coerceIn(1, 90) }
     }
 
+    /** Removes every stored preference. Used by the full-wipe path. */
+    suspend fun clearAll() {
+        context.settingsDataStore.edit { it.clear() }
+    }
+
     private suspend fun update(key: Preferences.Key<Boolean>, value: Boolean) {
         context.settingsDataStore.edit { it[key] = value }
     }
@@ -128,6 +138,7 @@ class SettingsRepository(private val context: Context) {
         val REVIEW_REMINDER_TIMES = stringSetPreferencesKey("review_reminder_times")
         val DARK_THEME = booleanPreferencesKey("dark_theme")
         val MOTION_ENABLED = booleanPreferencesKey("motion_enabled")
+        val SCREEN_SECURITY = booleanPreferencesKey("screen_security")
         val ONBOARDING_COMPLETE = booleanPreferencesKey("onboarding_complete")
         val PILOT_STARTED_AT = longPreferencesKey("pilot_started_at")
     }

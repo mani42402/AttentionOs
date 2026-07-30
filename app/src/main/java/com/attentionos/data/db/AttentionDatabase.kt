@@ -12,7 +12,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         TrainingExampleEntity::class,
         PersonalizedModelEntity::class,
     ],
-    version = 6,
+    version = 8,
     exportSchema = true,
 )
 abstract class AttentionDatabase : RoomDatabase() {
@@ -119,6 +119,45 @@ abstract class AttentionDatabase : RoomDatabase() {
          * Every insert invalidates the observed queries, so the important/queued/review lists
          * re-ran as full scans over the whole retention window on each incoming notification.
          */
+        /**
+         * Purges every identity derived from the old unsalted hash.
+         *
+         * The previous scheme was an unkeyed SHA-256 of `package:title`, which is reversible by
+         * enumerating installed packages against common contact names. The values cannot be
+         * re-derived under the new keyed scheme — titles are not stored unless the user opts in
+         * — and keeping them would leave the reversible identifiers sitting in the database, so
+         * they are cleared and relearned.
+         *
+         * What this costs the user: sender importance re-converges within a handful of
+         * interactions, and training examples only feed the JSONL export. The personalized
+         * model's learned weights are NOT touched.
+         */
+        /**
+         * Adds class centroids to the personalized model.
+         *
+         * A nearest-class-mean is usable from a handful of corrections, where the logistic
+         * classifier is still noise, so this is what lets personalization mean anything for
+         * users who never reach the 50-correction bar.
+         */
+        val MIGRATION_7_8 = object : Migration(7, 8) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL(
+                    "ALTER TABLE personalized_model ADD COLUMN importantCentroid BLOB",
+                )
+                database.execSQL(
+                    "ALTER TABLE personalized_model ADD COLUMN notImportantCentroid BLOB",
+                )
+            }
+        }
+
+        val MIGRATION_6_7 = object : Migration(6, 7) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL("DELETE FROM user_memory")
+                database.execSQL("UPDATE notification_events SET senderHash = ''")
+                database.execSQL("DELETE FROM training_examples")
+            }
+        }
+
         val MIGRATION_5_6 = object : Migration(5, 6) {
             override fun migrate(database: SupportSQLiteDatabase) {
                 database.execSQL(

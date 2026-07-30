@@ -27,6 +27,13 @@ data class NotificationSignal(
     val isConversation: Boolean,
     val isOngoing: Boolean,
     val categoryHint: String?,
+    /**
+     * Stable identity of the person or thread this came from, when the posting app supplies
+     * one. Falls back to the title, which is unreliable: apps that put a subject line, an
+     * unread count or a timestamp there produce a different "sender" on every notification,
+     * fragmenting the learned history for that contact.
+     */
+    val conversationId: String? = null,
 )
 
 data class UserMemory(

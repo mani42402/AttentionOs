@@ -13,12 +13,25 @@ class ExportManager(
     private val context: Context,
     private val repository: AttentionRepository,
 ) {
+    /**
+     * Deletes any export left behind by a previous run.
+     *
+     * The exported file is a plaintext copy of the whole training corpus. It used to persist in
+     * the cache indefinitely after sharing, so the app kept a second, unencrypted copy of the
+     * data long after the user was done with it.
+     */
+    suspend fun discardStaleExports() = withContext(Dispatchers.IO) {
+        File(context.cacheDir, EXPORT_DIRECTORY).listFiles()?.forEach { it.delete() }
+        Unit
+    }
+
     suspend fun exportJsonLines(): ExportResult = withContext(Dispatchers.IO) {
         val examples = repository.exportableTraining()
         if (examples.isEmpty()) return@withContext ExportResult.Empty
 
-        val exportDirectory = File(context.cacheDir, "exports").apply { mkdirs() }
-        val output = File(exportDirectory, "attentionos-training.jsonl")
+        val exportDirectory = File(context.cacheDir, EXPORT_DIRECTORY).apply { mkdirs() }
+        exportDirectory.listFiles()?.forEach { it.delete() }
+        val output = File(exportDirectory, EXPORT_FILENAME)
         output.bufferedWriter().use { writer ->
             examples.forEach { example ->
                 writer.append('{')
@@ -47,17 +60,33 @@ class ExportManager(
                 writer.newLine()
             }
         }
-        repository.markExported(examples.map { it.id })
         val uri = FileProvider.getUriForFile(
             context,
             "${context.packageName}.files",
             output,
         )
-        ExportResult.Ready(uri, examples.size)
+        // Deliberately not marked exported yet: see confirmExported.
+        ExportResult.Ready(uri, examples.size, examples.map { it.id })
+    }
+
+    /**
+     * Records that a batch actually left the app.
+     *
+     * Rows used to be flagged the moment the file was written, before the share sheet even
+     * opened, so dismissing the chooser consumed the batch permanently — those examples would
+     * never appear in a later export. The caller now confirms only once the share has started.
+     */
+    suspend fun confirmExported(ids: List<Long>) = withContext(Dispatchers.IO) {
+        repository.markExported(ids)
+    }
+
+    private companion object {
+        const val EXPORT_DIRECTORY = "exports"
+        const val EXPORT_FILENAME = "attentionos-training.jsonl"
     }
 }
 
 sealed interface ExportResult {
     data object Empty : ExportResult
-    data class Ready(val uri: Uri, val count: Int) : ExportResult
+    data class Ready(val uri: Uri, val count: Int, val exampleIds: List<Long>) : ExportResult
 }

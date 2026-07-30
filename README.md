@@ -64,6 +64,13 @@ Command-line verification:
 
 Everything is local. There is no internet permission and no analytics SDK.
 
+The database is encrypted with SQLCipher under a key wrapped by a hardware-backed Android
+Keystore entry, so a copy of the app's data directory is opaque without the device. Sender
+identities are keyed HMACs rather than plain hashes, notification content is excluded from
+screenshots and the recents preview, and deleting your data destroys the key material rather
+than only deleting rows. See [`docs/SECURITY.md`](docs/SECURITY.md) for the threat model and
+key hierarchy.
+
 By default the app stores:
 
 - app/package identifier;

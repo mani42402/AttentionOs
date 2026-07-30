@@ -5,6 +5,7 @@ import android.content.Intent
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
+import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -33,24 +34,25 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.navigation.compose.currentBackStackEntryAsState
+import androidx.navigation.compose.rememberNavController
+import com.attentionos.data.repository.StorageSummary
+import com.attentionos.service.ReviewReminderWorker
 import com.attentionos.ui.MainUiState
 import com.attentionos.ui.MainViewModel
 import com.attentionos.ui.UiEvent
-import com.attentionos.ui.theme.AttentionTheme
-import com.attentionos.ui.theme.Forest950
-import com.attentionos.service.ReviewReminderWorker
 import com.attentionos.ui.components.rememberNotificationAccess
 import com.attentionos.ui.home.DashboardScreen
 import com.attentionos.ui.insights.SimpleSummaryScreen
 import com.attentionos.ui.navigation.AppDestination
-import androidx.navigation.compose.rememberNavController
-import androidx.navigation.compose.currentBackStackEntryAsState
 import com.attentionos.ui.navigation.AttentionNavHost
-import com.attentionos.ui.navigation.navigateToTab
 import com.attentionos.ui.navigation.HelperBottomBar
+import com.attentionos.ui.navigation.navigateToTab
 import com.attentionos.ui.onboarding.OnboardingScreen
 import com.attentionos.ui.review.ActivityScreen
 import com.attentionos.ui.settings.SettingsScreen
+import com.attentionos.ui.theme.AttentionTheme
+import com.attentionos.ui.theme.Forest950
 import kotlinx.coroutines.flow.MutableStateFlow
 
 class MainActivity : ComponentActivity() {
@@ -70,17 +72,36 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+
+            // The UI renders stored notification titles and bodies. Without FLAG_SECURE those
+            // appear in the recents thumbnail, in screenshots, and to screen recorders — which
+            // would contradict the app's central promise. Default on, user-overridable.
+            LaunchedEffect(uiState.settings.screenSecurity) {
+                if (uiState.settings.screenSecurity) {
+                    window.setFlags(
+                        WindowManager.LayoutParams.FLAG_SECURE,
+                        WindowManager.LayoutParams.FLAG_SECURE,
+                    )
+                } else {
+                    window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+                }
+            }
+
             AttentionTheme(
                 darkTheme = uiState.settings.darkTheme,
                 motionEnabled = uiState.settings.motionEnabled,
             ) {
                 val reviewRequest by openReviewRequest.collectAsStateWithLifecycle()
+                val storage by viewModel.storage.collectAsStateWithLifecycle()
                 val snackbar = remember { SnackbarHostState() }
 
                 LaunchedEffect(Unit) {
                     viewModel.events.collect { event ->
                         when (event) {
-                            is UiEvent.ExportReady -> shareExport(event.result.uri, event.result.count)
+                            is UiEvent.ExportReady -> {
+                                shareExport(event.result.uri, event.result.count)
+                                viewModel.confirmExported(event.result.exampleIds)
+                            }
                             UiEvent.NothingToExport ->
                                 snackbar.showSnackbar("No learned examples to export yet.")
                             UiEvent.DataDeleted -> snackbar.showSnackbar("All local attention data deleted.")
@@ -129,6 +150,7 @@ class MainActivity : ComponentActivity() {
                         onReminderTimesChanged = viewModel::setReviewReminderTimes,
                         onDarkThemeChanged = viewModel::setDarkTheme,
                         onMotionChanged = viewModel::setMotionEnabled,
+                        onScreenSecurityChanged = viewModel::setScreenSecurity,
                         onRequestNotificationPermission = ::requestNotificationPermission,
                         onRetentionChanged = viewModel::setRetentionDays,
                         onReplayOnboarding = viewModel::replayOnboarding,
@@ -136,6 +158,7 @@ class MainActivity : ComponentActivity() {
                         onResetPersonalizedModel = viewModel::resetPersonalizedModel,
                         onRunTestLab = viewModel::runTestLab,
                         onDelete = viewModel::deleteAllData,
+                        storage = storage,
                         onFeedback = viewModel::submitFeedback,
                         onOpenNotificationAccess = {
                             startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
@@ -190,6 +213,7 @@ private fun AttentionApp(
     onReminderTimesChanged: (Set<Int>) -> Unit,
     onDarkThemeChanged: (Boolean) -> Unit,
     onMotionChanged: (Boolean) -> Unit,
+    onScreenSecurityChanged: (Boolean) -> Unit,
     onRequestNotificationPermission: () -> Unit,
     onRetentionChanged: (Int) -> Unit,
     onReplayOnboarding: () -> Unit,
@@ -197,6 +221,7 @@ private fun AttentionApp(
     onResetPersonalizedModel: () -> Unit,
     onRunTestLab: () -> Unit,
     onDelete: () -> Unit,
+    storage: StorageSummary,
     onFeedback: (String, Boolean) -> Unit,
     onOpenNotificationAccess: () -> Unit,
 ) {
@@ -264,12 +289,14 @@ private fun AttentionApp(
                         onReminderTimesChanged = onReminderTimesChanged,
                         onDarkThemeChanged = onDarkThemeChanged,
                         onMotionChanged = onMotionChanged,
+                        onScreenSecurityChanged = onScreenSecurityChanged,
                         onRequestNotificationPermission = onRequestNotificationPermission,
                         onRetentionChanged = onRetentionChanged,
                         onReplayOnboarding = onReplayOnboarding,
                         onExport = onExport,
                         onResetPersonalizedModel = onResetPersonalizedModel,
                         onDelete = onDelete,
+                        storage = storage,
                     )
                 },
             )

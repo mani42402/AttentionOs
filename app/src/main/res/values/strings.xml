@@ -82,4 +82,15 @@
     <string name="settings_store_message_content">Store message content</string>
     <string name="settings_useful_but_usually_able_to_wait">Useful, but usually able to wait</string>
     <string name="settings_your_data">Your data</string>
+    <string name="settings_hide_from_screenshots">Hide from screenshots</string>
+    <string name="settings_screen_security_on">Notification content is hidden from screenshots and the recent apps preview</string>
+    <string name="settings_screen_security_off">Screenshots and screen recording can capture notification content</string>
+    <string name="settings_whats_stored">What\'s stored on this device</string>
+    <string name="settings_notifications_recorded">Notifications recorded</string>
+    <string name="settings_senders_remembered">Senders remembered</string>
+    <string name="settings_learning_examples">Learning examples</string>
+    <string name="settings_with_message_text">With message text</string>
+    <string name="settings_none_stored">None</string>
+    <string name="settings_on_disk">Encrypted database size</string>
+    <string name="settings_storage_footnote">All of this stays on your device, encrypted. Deleting it destroys the encryption keys too, so nothing can be recovered afterwards.</string>
 </resources>

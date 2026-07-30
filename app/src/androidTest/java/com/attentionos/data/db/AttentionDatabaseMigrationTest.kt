@@ -33,7 +33,7 @@ class AttentionDatabaseMigrationTest {
     @Test
     fun migratesThroughEveryVersion() {
         helper.createDatabase(TEST_DB, 1).close()
-        helper.runMigrationsAndValidate(TEST_DB, 6, true, *ALL_MIGRATIONS).close()
+        helper.runMigrationsAndValidate(TEST_DB, 8, true, *ALL_MIGRATIONS).close()
     }
 
     @Test
@@ -51,7 +51,7 @@ class AttentionDatabaseMigrationTest {
             close()
         }
 
-        val migrated = helper.runMigrationsAndValidate(TEST_DB, 6, true, *ALL_MIGRATIONS)
+        val migrated = helper.runMigrationsAndValidate(TEST_DB, 8, true, *ALL_MIGRATIONS)
         migrated.query("SELECT notificationKey, priority FROM notification_events").use { cursor ->
             assertTrue("row should survive the migration", cursor.moveToFirst())
             assertEquals("key-1", cursor.getString(0))
@@ -79,6 +79,45 @@ class AttentionDatabaseMigrationTest {
         }
         for (expected in EXPECTED_V6_INDEXES) {
             assertTrue("missing index $expected, found $indexNames", expected in indexNames)
+        }
+        migrated.close()
+    }
+
+    @Test
+    fun migrationSixToSevenClearsReversibleHashesButKeepsTheLearnedModel() {
+        helper.createDatabase(TEST_DB, 6).apply {
+            execSQL(
+                "INSERT INTO user_memory (senderHash, importanceScore, averageResponseSeconds, " +
+                    "openCount, dismissCount, interactionCount, updatedAt) " +
+                    "VALUES ('deadbeefdeadbeefdeadbeef', 0.9, 30, 5, 1, 6, 1000)",
+            )
+            execSQL(
+                """
+                INSERT INTO personalized_model
+                    (id, weights, bias, positiveCount, negativeCount, updatedAt, version,
+                     evaluationCount, personalCorrectCount, baselineCorrectCount,
+                     importantEvaluationCount, importantCorrectCount,
+                     notImportantEvaluationCount, falseImportantCount)
+                VALUES (1, X'0102030405060708', 0.5, 12, 9, 1000, 1, 40, 30, 28, 10, 9, 8, 1)
+                """.trimIndent(),
+            )
+            close()
+        }
+
+        val migrated = helper.runMigrationsAndValidate(
+            TEST_DB,
+            7,
+            true,
+            AttentionDatabase.MIGRATION_6_7,
+            AttentionDatabase.MIGRATION_7_8,
+        )
+        migrated.query("SELECT COUNT(*) FROM user_memory").use { cursor ->
+            cursor.moveToFirst()
+            assertEquals("reversible sender identities must be cleared", 0, cursor.getInt(0))
+        }
+        migrated.query("SELECT positiveCount FROM personalized_model").use { cursor ->
+            assertTrue("the learned model must survive", cursor.moveToFirst())
+            assertEquals(12, cursor.getInt(0))
         }
         migrated.close()
     }
@@ -124,6 +163,8 @@ class AttentionDatabaseMigrationTest {
             AttentionDatabase.MIGRATION_3_4,
             AttentionDatabase.MIGRATION_4_5,
             AttentionDatabase.MIGRATION_5_6,
+            AttentionDatabase.MIGRATION_6_7,
+            AttentionDatabase.MIGRATION_7_8,
         )
 
         val EXPECTED_V6_INDEXES = listOf(

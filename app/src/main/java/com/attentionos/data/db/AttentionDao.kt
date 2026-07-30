@@ -70,6 +70,19 @@ interface AttentionDao {
     @Query("SELECT COUNT(*) FROM training_examples")
     fun observeTrainingCount(): Flow<Int>
 
+    @Query("SELECT COUNT(*) FROM notification_events")
+    fun observeEventCount(): Flow<Int>
+
+    @Query("SELECT COUNT(*) FROM user_memory")
+    fun observeSenderCount(): Flow<Int>
+
+    /** How many stored rows actually hold notification text, i.e. the opt-in content. */
+    @Query("SELECT COUNT(*) FROM notification_events WHERE title IS NOT NULL OR message IS NOT NULL")
+    fun observeStoredContentCount(): Flow<Int>
+
+    @Query("SELECT MIN(postedAt) FROM notification_events")
+    fun observeOldestEventAt(): Flow<Long?>
+
     /**
      * Recent inference latency.
      *
@@ -85,6 +98,25 @@ interface AttentionDao {
         """,
     )
     fun observeAverageAnalysisMillis(since: Long): Flow<Double?>
+
+    /**
+     * Corrected events that still carry an embedding from the current encoder.
+     *
+     * The replay buffer for refitting. Filtering on languageModelVersion matters: embeddings
+     * from a previous encoder describe a different space, and mixing them in would train the
+     * classifier on incompatible features.
+     */
+    @Query(
+        """
+        SELECT * FROM notification_events
+        WHERE action IN ('IMPORTANT', 'NOT_IMPORTANT')
+          AND embeddingQ8 IS NOT NULL
+          AND languageModelVersion = :modelVersion
+        ORDER BY actedAt DESC
+        LIMIT :limit
+        """,
+    )
+    suspend fun correctedEvents(modelVersion: String, limit: Int = 2_000): List<NotificationEventEntity>
 
     @Query("SELECT * FROM training_examples WHERE exported = 0 ORDER BY createdAt LIMIT :limit")
     suspend fun trainingForExport(limit: Int = 10_000): List<TrainingExampleEntity>
@@ -131,8 +163,39 @@ interface AttentionDao {
     @Query("DELETE FROM notification_events WHERE postedAt < :before")
     suspend fun deleteEventsBefore(before: Long): Int
 
-    @Query("DELETE FROM training_examples WHERE createdAt < :before AND exported = 1")
-    suspend fun deleteExportedTrainingBefore(before: Long): Int
+    /**
+     * Deletes aged training rows regardless of export status.
+     *
+     * This previously required `exported = 1`, so an unexported example — which carries a
+     * sender hash and a content embedding — was never removed by retention and accumulated
+     * for the life of the install.
+     */
+    @Query("DELETE FROM training_examples WHERE createdAt < :before")
+    suspend fun deleteTrainingBefore(before: Long): Int
+
+    /** Caps total training rows, keeping the most recent. Guards against unbounded growth. */
+    @Query(
+        """
+        DELETE FROM training_examples WHERE id NOT IN (
+            SELECT id FROM training_examples ORDER BY createdAt DESC LIMIT :keep
+        )
+        """,
+    )
+    suspend fun trimTrainingTo(keep: Int): Int
+
+    /** Sender memory for senders not seen within the retention horizon. */
+    @Query("DELETE FROM user_memory WHERE updatedAt < :before")
+    suspend fun deleteMemoryBefore(before: Long): Int
+
+    /** Caps sender memory rows, keeping the most recently updated. */
+    @Query(
+        """
+        DELETE FROM user_memory WHERE senderHash NOT IN (
+            SELECT senderHash FROM user_memory ORDER BY updatedAt DESC LIMIT :keep
+        )
+        """,
+    )
+    suspend fun trimMemoryTo(keep: Int): Int
 
     @Query("DELETE FROM notification_events")
     suspend fun deleteAllEvents()

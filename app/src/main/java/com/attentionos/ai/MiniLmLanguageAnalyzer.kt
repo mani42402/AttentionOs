@@ -19,7 +19,7 @@ import kotlin.math.sqrt
 
 /**
  * Real on-device transformer inference using the pretrained, INT8-quantized
- * sentence-transformers/paraphrase-MiniLM-L3-v2 model.
+ * sentence-transformers/all-MiniLM-L6-v2 model.
  *
  * The model creates a 384-dimensional semantic embedding. Notification meaning is resolved by
  * cosine similarity to embedded attention prototypes. The deterministic analyzer is retained only
@@ -291,11 +291,14 @@ class MiniLmLanguageAnalyzer(
         }
     }
 
-    private companion object {
-        const val MODEL_ASSET = "models/minilm-l3-qint8-arm64.onnx"
+    internal companion object {
+        /** Identifier of the encoder in use, for evaluation scorecards and export metadata. */
+        fun modelVersion(): String = MODEL_VERSION
+
+        const val MODEL_ASSET = "models/minilm-l6-qint8-arm64.onnx"
         const val VOCAB_ASSET = "models/minilm-vocab.txt"
-        const val MODEL_FILENAME = "minilm-l3-qint8-arm64.onnx"
-        const val MODEL_VERSION = "paraphrase-MiniLM-L3-v2-qint8-arm64"
+        const val MODEL_FILENAME = "minilm-l6-qint8-arm64.onnx"
+        const val MODEL_VERSION = "all-MiniLM-L6-v2-qint8-arm64"
         const val MAX_TOKENS = 64
         const val EMBEDDING_SIZE = 384
         const val CATEGORY_THRESHOLD = 0.22f

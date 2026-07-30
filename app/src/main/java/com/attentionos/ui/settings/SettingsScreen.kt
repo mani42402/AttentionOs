@@ -51,6 +51,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.attentionos.R
 import com.attentionos.core.common.TimeConstants
+import com.attentionos.data.repository.StorageSummary
 import com.attentionos.ui.MainUiState
 import com.attentionos.ui.components.ActionSettingRow
 import com.attentionos.ui.components.ScreenHeader
@@ -80,12 +81,14 @@ internal fun SettingsScreen(
     onReminderTimesChanged: (Set<Int>) -> Unit,
     onDarkThemeChanged: (Boolean) -> Unit,
     onMotionChanged: (Boolean) -> Unit,
+    onScreenSecurityChanged: (Boolean) -> Unit,
     onRequestNotificationPermission: () -> Unit,
     onRetentionChanged: (Int) -> Unit,
     onReplayOnboarding: () -> Unit,
     onExport: () -> Unit,
     onResetPersonalizedModel: () -> Unit,
     onDelete: () -> Unit,
+    storage: StorageSummary,
 ) {
     var showDeleteDialog by remember { mutableStateOf(false) }
     var showResetModelDialog by remember { mutableStateOf(false) }
@@ -243,6 +246,18 @@ internal fun SettingsScreen(
                     checked = state.settings.motionEnabled,
                     onCheckedChange = onMotionChanged,
                 )
+                SoftDivider()
+                ToggleSettingRow(
+                    icon = Icons.Default.Lock,
+                    title = stringResource(R.string.settings_hide_from_screenshots),
+                    subtitle = if (state.settings.screenSecurity) {
+                        stringResource(R.string.settings_screen_security_on)
+                    } else {
+                        stringResource(R.string.settings_screen_security_off)
+                    },
+                    checked = state.settings.screenSecurity,
+                    onCheckedChange = onScreenSecurityChanged,
+                )
             }
         }
         item {
@@ -289,6 +304,41 @@ internal fun SettingsScreen(
                         }
                     }
                 }
+            }
+        }
+        item {
+            SettingsGroup(title = stringResource(R.string.settings_whats_stored)) {
+                StorageRow(
+                    label = stringResource(R.string.settings_notifications_recorded),
+                    value = storage.notificationCount.toString(),
+                )
+                StorageRow(
+                    label = stringResource(R.string.settings_senders_remembered),
+                    value = storage.senderCount.toString(),
+                )
+                StorageRow(
+                    label = stringResource(R.string.settings_learning_examples),
+                    value = storage.trainingExampleCount.toString(),
+                )
+                StorageRow(
+                    label = stringResource(R.string.settings_with_message_text),
+                    value = if (storage.storedContentCount == 0) {
+                        stringResource(R.string.settings_none_stored)
+                    } else {
+                        storage.storedContentCount.toString()
+                    },
+                )
+                StorageRow(
+                    label = stringResource(R.string.settings_on_disk),
+                    value = formatBytes(storage.databaseBytes),
+                )
+                SoftDivider()
+                Text(
+                    stringResource(R.string.settings_storage_footnote),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp),
+                )
             }
         }
         item {
@@ -520,4 +570,31 @@ internal fun InterruptionPriorityRow(
             )
         }
     }
+}
+
+/** One line of the storage dashboard: a plain-language label and its current value. */
+@Composable
+internal fun StorageRow(label: String, value: String) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 4.dp, vertical = 9.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            label,
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Text(value, style = MaterialTheme.typography.titleMedium)
+    }
+}
+
+/** Human-readable byte count; the dashboard is meant to be read, not parsed. */
+internal fun formatBytes(bytes: Long): String = when {
+    bytes <= 0 -> "0 KB"
+    bytes < 1024 -> "$bytes B"
+    bytes < 1024 * 1024 -> "${bytes / 1024} KB"
+    else -> "%.1f MB".format(bytes / (1024.0 * 1024.0))
 }

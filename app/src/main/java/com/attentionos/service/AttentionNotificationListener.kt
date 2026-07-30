@@ -1,7 +1,9 @@
 package com.attentionos.service
 
 import android.app.Notification
+import android.app.Person
 import android.os.Build
+import android.os.Bundle
 import android.os.SystemClock
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
@@ -9,6 +11,7 @@ import android.util.LruCache
 import com.attentionos.AttentionApplication
 import com.attentionos.data.repository.UserAction
 import com.attentionos.domain.NotificationSignal
+import com.attentionos.security.SenderIdentity
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -82,6 +85,16 @@ class AttentionNotificationListener : NotificationListenerService() {
                         ),
                 isOngoing = isOngoing,
                 categoryHint = notification.category,
+                conversationId = SenderIdentity.of(
+                    packageName = sourcePackage,
+                    personKey = personKey(extras),
+                    shortcutId = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                        notification.shortcutId
+                    } else {
+                        null
+                    },
+                    title = title,
+                ),
             )
 
             // Suspend for the stored settings rather than reading the hot flow's current value:
@@ -133,6 +146,29 @@ class AttentionNotificationListener : NotificationListenerService() {
         if (previous != null && now - previous < ALERT_DEDUPLICATION_MILLIS) return false
         alertedKeys.put(key, now)
         return true
+    }
+
+    /**
+     * The first [Person] attached to the notification, when the app supplies one.
+     *
+     * Messaging apps set EXTRA_PEOPLE_LIST for conversations; its key is stable across messages
+     * from the same contact, which the notification title is not.
+     */
+    private fun personKey(extras: Bundle): String? {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) return null
+        val people = runCatching {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                extras.getParcelableArrayList(Notification.EXTRA_PEOPLE_LIST, Person::class.java)
+            } else {
+                // The type-safe overload only exists from API 33; below that the untyped one is
+                // the only option. Guarding solely on API 28 would have thrown NoSuchMethodError
+                // on Android 9 through 12 and silently dropped back to title-based identity.
+                @Suppress("DEPRECATION")
+                extras.getParcelableArrayList<Person>(Notification.EXTRA_PEOPLE_LIST)
+            }
+        }.getOrNull() ?: return null
+        val person = people.firstOrNull() ?: return null
+        return person.key ?: person.uri ?: person.name?.toString()
     }
 
     private fun appLabel(packageName: String): String =
