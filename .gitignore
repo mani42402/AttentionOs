@@ -19,3 +19,7 @@ secrets.properties
 *.hprof
 lint-results*.html
 lint-results*.xml
+
+# Bake-off encoder candidates: large binaries kept out of history. Regenerate with
+# tools/build_encoder_asset.py when a comparison needs re-running.
+app/src/androidTest/assets/candidates/

@@ -34,6 +34,23 @@ object AttentionPolicy {
         AttentionPriority.SILENT,
     )
 
+    /**
+     * The band Attention Mode holds back, which is wider than the band held when it is off.
+     *
+     * This is how the mode does its job. It previously worked by subtracting 0.17 from every
+     * non-urgent score so that MEDIUM items fell into [queueablePriorities] — which both
+     * reclassified notifications because of a user setting, and made the HIGH threshold
+     * arithmetically unreachable for a message from an unknown sender: the ceiling for such a
+     * message is 0.850, the penalty took it to 0.680, and HIGH begins at 0.680. No model output
+     * could clear it. Widening the queue band achieves the same restraint without capping the
+     * top of the scale.
+     */
+    val focusModeQueueablePriorities: Set<AttentionPriority> = setOf(
+        AttentionPriority.MEDIUM,
+        AttentionPriority.LOW,
+        AttentionPriority.SILENT,
+    )
+
     /** Notification category hints that always warrant immediate attention. */
     const val CATEGORY_HINT_CALL = "call"
     const val CATEGORY_HINT_ALARM = "alarm"
@@ -60,5 +77,5 @@ object AttentionPolicy {
         categoryHint == CATEGORY_HINT_ALARM
 
     fun shouldQueue(focusModeEnabled: Boolean, priority: AttentionPriority): Boolean =
-        focusModeEnabled && priority in queueablePriorities
+        focusModeEnabled && priority in focusModeQueueablePriorities
 }

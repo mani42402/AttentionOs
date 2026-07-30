@@ -9,7 +9,7 @@ Android notification
 NotificationListenerService
         │ copies bounded fields
         ▼
-PriorityEngine ── potion-base-8M static embeddings (INT8, memory-mapped)
+PriorityEngine ── multilingual static embeddings (INT8 @128d, memory-mapped)
         │             └── deterministic safety fallback
         ├── Personal logistic model (after activation gate)
         ▼
@@ -30,12 +30,12 @@ Explicit Important / Not important feedback overrides passive behavioral inferen
 updates sender memory and writes a high-confidence HIGH or LOW training label; notification opens
 and dismissals remain useful but lower-confidence implicit signals.
 
-Each model-backed decision carries a 256-dimensional normalized embedding. The app stores it
-with the event and eventual training example using symmetric INT8 quantization (256 bytes rather
+Each model-backed decision carries a 128-dimensional normalized embedding. The app stores it
+with the event and eventual training example using symmetric INT8 quantization (128 bytes rather
 than 1,536 bytes as Float32). Exports include the Base64-encoded vector, encoding metadata, and exact
 language-model version so training jobs cannot silently mix incompatible feature spaces.
 
-The personalized classifier has 326 inputs: the frozen 256-dimensional embedding, hour
+The personalized classifier has 198 inputs: the frozen 128-dimensional embedding, hour
 sine/cosine, sender importance, sender open rate, focus-mode state, and the safe engine's base
 score. A correction runs one bounded stochastic-gradient update and persists 390 Float32 weights
 (about 1.6 KB) plus a bias and class counts. No background training job, wake lock, or model
@@ -143,9 +143,9 @@ device-independent enough to compare directly.
 
 | Budget | Target | Measured |
 |---|---|---|
-| Download size | <= 30 MB | 9.8 MB |
-| Install footprint | not previously tracked | 11.9 MB |
-| Per-notification inference | well under the battery budget | 1.9 ms median, 3.3 ms p90 |
+| Download size | <= 30 MB | 16.3 MB |
+| Install footprint | not previously tracked | 18.2 MB |
+| Per-notification inference | well under the battery budget | 1.38 ms median, 3.5 ms p99 |
 | Encoder load, once per process | one-off | ~1.7 s cold, then cached |
 | Cold start, minified release | no target set | ~1.24 s median (840-1746 ms, emulator) |
 
@@ -165,10 +165,15 @@ deciding.
 ### How it got here
 
 The encoder was `all-MiniLM-L6-v2` on ONNX Runtime until the Phase 2 bake-off. The runtime alone
-measured 26.7 MB — larger than the model it existed to run — and the pair accounted for 91% of
-the binary. Replacing both with a static token-lookup table took the download from 29.9 MB to
-9.8 MB and the install footprint from 53.3 MB to 11.9 MB, with no measurable quality loss on the
-labelled set. `docs/MODEL_STRATEGY.md` records both scorecards.
+measured 26.7 MB — larger than the model it existed to run — and the pair accounted for 91% of the
+binary. Replacing both with a static token-lookup table took the download from 29.9 MB to 9.8 MB
+and the install footprint from 53.3 MB to 11.9 MB with no measurable quality loss.
+
+Testing against notifications people actually receive then showed that table could only read
+English, so it was replaced again by a multilingual one of the same kind. That cost 6.5 MB and
+returned it in speed: the embedding is 128 dimensions rather than 256, so per-notification cost
+*fell* from 2.05 ms to 1.38 ms. `docs/MODEL_STRATEGY.md` records every scorecard and the three
+faults the exercise uncovered.
 
 ## Interface system
 

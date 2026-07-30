@@ -1,86 +1,65 @@
-# On-device model strategy
-
 ## Current encoder
 
-`potion-base-8M` — a static token-embedding table distilled from `bge-base-en-v1.5`, quantised
-to INT8.
+`sentence-transformers/static-similarity-mrl-multilingual-v1`, Matryoshka-truncated to 128
+dimensions and quantised to INT8.
 
 | | |
 |---|---|
-| Asset | 7.3 MB (`models/potion-base-8m-q8.bin`) + 0.2 MB vocabulary |
-| Embedding | 256 dimensions |
-| Vocabulary | pruned bert-base-uncased WordPiece, 29,528 tokens |
+| Asset | 13.3 MB table + 0.8 MB vocabulary |
+| Embedding | 128 dimensions |
+| Vocabulary | 105,879 WordPiece tokens, multilingual |
 | Runtime | none — a memory-mapped lookup table |
-| Licence | MIT |
+| Licence | Apache-2.0 |
 
-There is no transformer. Every token has one pretrained vector and a sentence is the mean of its
-tokens, normalised. A notification therefore costs a few thousand additions instead of six
-attention layers.
-
-The honest description of the trade: a bag of token vectors **cannot represent word order**, so
-"the payment failed" and "failed the payment" embed identically. That is a real limitation, and
-the only reason it is acceptable is that it was measured on notification text rather than
-assumed away.
-
-### What it replaced
-
-`all-MiniLM-L6-v2` INT8 plus ONNX Runtime. Removing both is the largest size change the project
-will ever make:
+Script coverage against the English table it replaced:
 
 | | before | after |
 |---|---|---|
-| Download (AAB, excluding metadata) | 29.9 MB | **9.8 MB** |
-| Install footprint | 53.3 MB | **11.9 MB** |
-| `libonnxruntime.so` | 26.7 MB | gone |
-| encoder asset | 22.0 MB | 7.3 MB |
+| Latin | 27,769 | 57,928 |
+| Han | 492 | 16,694 |
+| Cyrillic | 86 | 12,163 |
+| Arabic | 88 | 4,526 |
+| Devanagari | 70 | 1,596 |
+| Hangul | 70 | 1,397 |
+| Kana | 188 | 1,187 |
 
-ONNX Runtime measured **26.7 MB**, not the 6–15 MB the original plan assumed. That single
-correction is what made the bake-off decisive rather than marginal.
+Rebuild with `tools/build_encoder_asset.py`, which refuses to emit an asset whose INT8
+reconstruction cosine drops below 0.999 or whose tokenizer is not WordPiece.
 
-## Bake-off: `all-MiniLM-L6-v2` vs `potion-base-8M`
+**128 dimensions, not 256.** Matryoshka training makes the leading dimensions usable alone, and
+128 scored the same as 256 on the labelled set while halving both the asset and the
+per-notification arithmetic. No reason to pay twice for it.
 
-Run by `EncoderEvaluationTest` on an Android 16 emulator: identical samples, identical scoring,
-identical prototype sentences, one encoder swapped.
+Download is 16.3 MB and the install footprint 18.2 MB, against a 30 MB budget. Median inference
+fell from 2.05 ms to 1.38 ms *despite* the larger vocabulary, because the embedding is half as
+wide.
 
-A first run over 20 samples put MiniLM ahead on category accuracy by 5 points. That is one
-sample. The labelled set was widened to 50 before anything was decided, and the ordering
-reversed — which is the whole reason the first number could not be trusted.
+## Three faults, each hiding the next
 
-```
-                    all-MiniLM-L6-v2   potion-base-8M
-samples                           50               50
-category accuracy              68.0%            72.0%
-guaranteed alerts    100.0% (12/12)   100.0% (12/12)   [asserted]
-wanted promptly       70.6% (12/17)     70.6% (12/17)  [measured]
-correctly quiet       84.8% (28/33)     81.8% (27/33)
-latency median                4.6 ms           1.9 ms
-latency p90                   7.3 ms           3.3 ms
-```
+**The encoder could not read most of the world.** `potion-base-8M` is distilled from an English
+model: 94% Latin vocabulary, 70 Devanagari tokens, 88 Arabic. Chinese came back 68% unknown.
 
-**Decision: adopt `potion-base-8M`.** Not because it scores better — a 2-sample difference on a
-50-sample set is noise in both directions — but because it is *not measurably worse* on any
-metric that matters, ties exactly on both safety and ranking measures, is 2.4× faster, and costs
-20 MB less to download and 41 MB less on disk.
+**The tokenizer was shredding Indic and Arabic script.** The word pattern was `[\p{L}\p{N}]+`,
+and Devanagari vowel signs are Unicode `Mc`, not letters — so "पापा" split into four "words" at
+every matra and emitted 18 pieces where the reference emits 11. Every such notification was
+reduced to syllable fragments whose embeddings mean nothing. It looked like a model problem until
+somebody compared token counts against the reference tokenizer.
 
-What the numbers do **not** support is a claim that the static encoder understands notifications
-better. The defensible statement is that on this task, at this text length, the transformer's
-extra capacity was not buying anything measurable.
+**Attention Mode made the top of the scale unreachable.** It subtracted 0.17 from every
+non-urgent score so MEDIUM items would fall into the queueable band. A conversation from an
+unknown sender has a ceiling of 0.850; the penalty took it to 0.680; `HIGH` begins at 0.680. No
+encoder output could clear it — a perfect oracle returning urgency 1.0 landed exactly on the
+threshold. Attention Mode now widens the queue band instead, which achieves the same restraint
+without touching classification.
 
-Both encoders miss the same five "wanted promptly" cases, and both hold every hard safety floor
-at 100%. The shared misses are a personalization gap, not an encoder gap — see below.
+That third fault is why the first bake-off appeared to show the encoder did not matter: every
+candidate scored an identical 4/11 on English because all three were hitting the same cap.
 
-### Consequences
-
-- ONNX Runtime, the MiniLM assets, and `MiniLmLanguageAnalyzer` are deleted.
-- The tokenizer's `[CLS]`/`[SEP]` bracketing and attention mask existed only to build ONNX input
-  tensors. Static pooling averages per-token vectors directly, so both were removed rather than
-  left as unreachable code.
-- Embeddings move 384 → 256 dimensions, so `PersonalizedAttentionModel.MODEL_VERSION` is 3 and
-  weights learned in the old feature space are discarded rather than reinterpreted.
-- `StaticEmbeddingParityTest` checks the Kotlin tokenizer against HuggingFace `tokenizers` on the
-  shipped vocabulary, including accented Latin and CJK. A bake-off between two encoders is
-  meaningless if one of them is not the model it claims to be, and a one-rule difference in
-  normalisation would not show up anywhere in a scorecard.
+**A calibrated constant broke on contact with a new model.** Category assignment discarded any
+match below a cosine of 0.22, a number tuned against one embedding space. In the new space it
+silently stopped recognising security alerts as SECURITY, costing them their safety floor. The
+prototype set already contains an OTHER entry, so nearest-prototype normalises itself; the
+threshold was removed rather than retuned.
 
 ## Personalization
 
@@ -151,64 +130,38 @@ asking about dinner, a partner waiting outside, a family message about a hospita
 landlord about rent, school about a child — in English, Hindi, Urdu, Chinese and Spanish.
 
 ```
-           n    unknown tokens   must-reach   quiet-right
-ENGLISH    18        0.5%           4/11          6/7
-HINDI      12        5.0%           3/8           4/4
-URDU       10        3.1%           3/7           3/3
-CHINESE    10       68.1%           3/7           3/3
-SPANISH     9        0.0%           1/6           3/3
+                     unknown tokens        must-reach
+                     before    after    before    after
+ENGLISH                0.5%     0.5%      4/11     6/11
+HINDI                  5.0%     0.0%      3/8      3/8
+URDU                   3.1%     0.0%      3/7      6/7
+CHINESE               68.1%     0.0%      3/7      5/7
+SPANISH                0.0%     0.0%      1/6      3/6
+                                        ------   ------
+TOTAL                                    14/39    23/39
 ```
 
 "Must-reach" means a person would be upset to have missed it. Nothing is ever hidden — a MEDIUM
 or LOW notification still appears in the shade — so a miss means *delivered quietly instead of
-promptly*, which is the difference between the product working and not.
+promptly*. Safety floors held 102/102 under a 400-notification flood.
 
-### What this says
+### What is still wrong
 
-**The classifier contributes almost nothing on real interpersonal messages.** English recall is
-4 of 11, and those four are exactly the ones a deterministic floor catches: the missed call, the
-OTP, the fraud alert, the alarm. Everything requiring comprehension lands low:
+Category accuracy on the 50-sample English set fell from 68% to 52%. Two changes are confounded
+there — the new embedding space and the removal of the cosine cutoff — and they have not been
+separated. The category is a hint feeding the score rather than a decision, the floors held, and
+must-reach recall rose sharply, so it was not treated as blocking. It is the obvious next
+measurement.
 
-```
-Family: "Dad is in the hospital, call me now"          -> MEDIUM (SOCIAL)
-Priya:  "I'm outside your office, come down"           -> MEDIUM (SOCIAL)
-Rahul (Manager): "Can you look at the outage before…"  -> LOW (WORK)
-Landlord: "Rent is overdue, please transfer today"     -> LOW (OTHER)
-School: "Aarav was marked absent today"                -> LOW (OTHER)
-```
+Sixteen must-reach cases still miss. Some labels are arguable — a dinner invitation and a
+confirmed appointment are not obviously urgent — but three are not: a manager asking about an
+outage, a landlord about overdue rent, and a school reporting a child absent. Those are
+non-conversation, non-floor notifications where nothing but comprehension can carry them.
 
-Earlier scorecards read 68–75% because their samples contained the urgency vocabulary the
-keyword rules were written against — "production down", "returning errors", "security alert".
-Real messages from real people do not.
-
-**The safety floors are English-only.** `securityWords` and `financeWords` are ASCII literals, so
-`ओटीपी`, `او ٹی پی`, `验证码` and `código de verificación` match nothing. A Hindi-, Urdu-,
-Chinese- or Spanish-speaking user's one-time password and fraud alert receive no protection at
-all. The only language-independent floors are the ones Android supplies as a `categoryHint`:
-calls and alarms. Those held in every language, and are the reason the non-English columns are
-not zero.
-
-**Hindi and Urdu look readable and are not.** At 3–5% unknown tokens they appear healthier than
-Chinese at 68%, but that is an artefact: WordPiece decomposes their words into the few Devanagari
-and Arabic characters the vocabulary happens to contain. Those character embeddings were
-distilled from English text, so the encoder returns confident nonsense rather than admitting it
-cannot read the input. Chinese failing loudly is the safer failure.
-
-### What would fix it, cheapest first
-
-1. **Language-independent security and finance floors.** A 4–8 digit code in a short body is a
-   one-time password in every language, and the sending package is known. This is the urgent one:
-   it is a safety gap, not a quality gap, and it does not need a new model.
-2. **Weight named-person conversations properly.** A message from a named contact in a messaging
-   app currently adds 0.08 to the score. That single number is why "Dad is in the hospital" reads
-   as social chatter. Language-independent and cheap.
-3. **The multilingual encoder** — `static-similarity-mrl-multilingual-v1` at 128d, 13.6 MB plus a
-   2.5 MB Rust tokenizer. Fixes the scripts properly, and is the only one of the three that
-   requires new weights.
-
-Personalization does not substitute for any of these. It needs a seven-day pilot and 50
-corrections before it may influence ranking, so a new user gets the uncorrected behaviour for at
-least a week.
+The safety floors remain English keyword lists, so `ओटीपी`, `او ٹی پی` and `验证码` match
+nothing. The only language-independent floors are Android's own `categoryHint` for calls and
+alarms. A one-time code is 4–8 digits in every script and the sending package is known, so this
+needs no model — and a safety floor should not depend on one being right.
 
 ## Ruled out
 
@@ -231,14 +184,14 @@ Researched July 2026; revisit only if the underlying facts change.
   host↔accelerator transfer dominate the work.
 
 
-## Multilingual (later)
+## Remaining language work
 
-`static-similarity-mrl-multilingual-v1` truncated to 128 dimensions is 13.6 MB plus a 2.5 MB
-tokenizer — *smaller than today* while covering 50+ languages, with ONNX Runtime deleted. It
-needs a real Rust tokenizer (a 105k mBERT vocabulary is beyond the hand-rolled WordPiece) and a
-dimension change. Not before the English bake-off settles.
+The encoder now reads every script the corpus covers. What is left is not the model:
 
-Note the current CJK limitation: tokenization is correct (characters are segmented per BERT's
-rules), but an English vocabulary maps most ideographs to `[UNK]`, so Chinese notifications
-carry little signal. Kana and Hangul fare better. Real multilingual quality needs the model
-above, not another tokenizer fix.
+1. **Language-independent security and finance floors.** Digit-pattern detection plus the sending
+   package. A safety floor must not depend on an English keyword list, or on any model.
+2. **Weight named-person conversations properly.** A message from a named contact in a messaging
+   app adds 0.08 to the score. That single number is why "Dad is in the hospital, call me now"
+   reads as social chatter.
+3. **Separate the category-accuracy regression** into its two causes before deciding whether it
+   matters.

@@ -101,11 +101,28 @@ class AttentionPolicyTest {
     }
 
     @Test
-    fun `queueing only applies to low and silent while focus mode is on`() {
+    fun `focus mode queues everything from medium down, and nothing above it`() {
+        // Attention Mode used to achieve this by subtracting 0.17 from the score so MEDIUM items
+        // fell into the LOW band. That reclassified notifications because of a user setting, and
+        // it made HIGH unreachable for a message from an unknown sender — whose ceiling was
+        // 0.850, minus the penalty exactly 0.680, where HIGH begins. Widening the queue band
+        // keeps the restraint and leaves the scale intact.
         for (priority in AttentionPriority.entries) {
             val queued = AttentionPolicy.shouldQueue(focusModeEnabled = true, priority = priority)
-            val expected = priority == AttentionPriority.LOW || priority == AttentionPriority.SILENT
+            val expected = priority.ordinal >= AttentionPriority.MEDIUM.ordinal
             assertEquals("queueing mismatch for $priority", expected, queued)
+        }
+    }
+
+    @Test
+    fun `critical and high are never held back`() {
+        // The point of the mode is calm, not silence. Anything the ladder placed above MEDIUM has
+        // already been judged worth interrupting for.
+        for (priority in listOf(AttentionPriority.CRITICAL, AttentionPriority.HIGH)) {
+            assertFalse(
+                "$priority must reach the user even in Attention Mode",
+                AttentionPolicy.shouldQueue(focusModeEnabled = true, priority = priority),
+            )
         }
     }
 

@@ -45,6 +45,119 @@ class RealWorldMultilingualTest {
         val hint: String? = null,
     )
 
+    /**
+     * Scores one encoder over the whole corpus and returns per-language rows.
+     *
+     * Factored out so the shipped encoder and the multilingual candidates run through identical
+     * code — a bake-off where the harness differs proves nothing.
+     */
+    private fun score(
+        label: String,
+        analyzer: StaticEmbeddingAnalyzer,
+        vocabulary: List<String>,
+    ): Triple<String, Int, Int> {
+        analyzer.warmUp()
+        val engine = PriorityEngine(analyzer)
+        val tokenizer = WordPieceTokenizer(vocabulary)
+        val unknownId = vocabulary.indexOf("[UNK]")
+        val report = StringBuilder("\n=== $label ".padEnd(56, '=') + "\n")
+        var totalReach = 0
+        var totalMust = 0
+        val missed = mutableListOf<String>()
+
+        for (lang in Lang.entries) {
+            val cases = CASES.filter { it.lang == lang }
+            var reached = 0
+            var mustReach = 0
+            var quietCorrect = 0
+            var quietTotal = 0
+            var unknown = 0
+            var tokens = 0
+            for (case in cases) {
+                val ids = tokenizer.encodePieces(
+                    "${case.title} ${case.body}",
+                    StaticEmbeddingAnalyzer.MAX_TOKENS,
+                )
+                tokens += ids.size
+                unknown += ids.count { it == unknownId }
+                val decision = engine.decide(
+                    signal = NotificationSignal(
+                        packageName = case.pkg,
+                        title = case.title,
+                        text = case.body,
+                        postedAt = System.currentTimeMillis(),
+                        isConversation = case.conversation,
+                        isOngoing = false,
+                        categoryHint = case.hint,
+                    ),
+                    context = AttentionContext(focusModeEnabled = true, hourOfDay = 14),
+                    memory = null,
+                )
+                val prominent = decision.priority.ordinal <= AttentionPriority.HIGH.ordinal
+                if (case.mustReach) {
+                    mustReach++
+                    if (prominent) reached++ else missed += "[$lang] ${case.title}"
+                } else {
+                    quietTotal++
+                    if (!prominent) quietCorrect++
+                }
+            }
+            totalReach += reached
+            totalMust += mustReach
+            report.append(
+                "  %-8s n=%-3d unknown %5.1f%%   must-reach %2d/%-2d   quiet-right %2d/%-2d\n"
+                    .format(lang, cases.size, unknown * 100.0 / tokens, reached, mustReach, quietCorrect, quietTotal),
+            )
+        }
+        report.append("  TOTAL must-reach $totalReach/$totalMust\n")
+        report.append("=".repeat(56))
+        Log.i(TAG, report.toString())
+        Log.i(TAG, "$label missed: ${missed.joinToString(", ")}")
+        return Triple(label, totalReach, totalMust)
+    }
+
+    @Test
+    fun multilingualBakeOff() {
+        val testAssets = InstrumentationRegistry.getInstrumentation().context.assets
+        val shippedVocab = context.assets
+            .open(StaticEmbeddingAnalyzer.VOCAB_ASSET)
+            .bufferedReader()
+            .use { it.readLines() }
+        // The 256d arm exists to justify shipping 128d rather than paying twice the size for it.
+        // Regenerate the candidate with tools/build_encoder_asset.py --dims 256 to re-run.
+        val mrlVocab = testAssets
+            .open("candidates/mrl-vocab.txt")
+            .bufferedReader()
+            .use { it.readLines() }
+
+        val results = listOf(
+            score(
+                "shipped: static-mrl-multilingual @128d",
+                StaticEmbeddingAnalyzer(context),
+                shippedVocab,
+            ),
+            score(
+                "static-mrl-multilingual @256d",
+                StaticEmbeddingAnalyzer(
+                    context = context,
+                    asset = EncoderAsset(
+                        tablePath = "candidates/mrl-256d-q8.bin",
+                        vocabPath = "candidates/mrl-vocab.txt",
+                        dimensions = 256,
+                        version = "static-mrl-multilingual-256d",
+                        fromTestAssets = true,
+                    ),
+                ),
+                mrlVocab,
+            ),
+        )
+        Log.i(TAG, "\n=== bake-off summary ===")
+        results.forEach { (label, reach, must) ->
+            Log.i(TAG, "  %-42s %2d/%-2d".format(label, reach, must))
+        }
+        assertTrue("every candidate should classify something", results.all { it.second > 0 })
+    }
+
     @Test
     fun realNotificationsAcrossLanguages() {
         val analyzer = StaticEmbeddingAnalyzer(context)
@@ -128,13 +241,9 @@ class RealWorldMultilingualTest {
         // Android, not from text. They must never fail.
         assertTrue("categoryHint floors failed: $floorFailures", floorFailures.isEmpty())
 
-        // Recorded baseline, not a target. English must-reach recall is 4/11: the four that get
-        // through are exactly the ones a deterministic floor catches (missed call, OTP, fraud,
-        // alarm), and every case that needs actual comprehension — "Dad is in the hospital, call
-        // me now", "Rent is overdue", "Aarav was marked absent" — lands on MEDIUM or LOW.
-        //
-        // This assertion exists so the number cannot silently get worse while the gap is being
-        // worked on. Raise it when the classifier improves; do not relax it.
+        // Recorded baseline, not a target. Raise it when the classifier improves; never relax it.
+        // History: 4/11 with the English encoder and the Attention Mode score penalty in place,
+        // 5/11 once the penalty was removed, 6/11 on the multilingual table.
         assertTrue(
             "English must-reach recall fell below the recorded baseline: " +
                 "$englishReached/$englishMustReach",
@@ -143,13 +252,11 @@ class RealWorldMultilingualTest {
     }
 
     @Test
-    fun chineseIsMostlyUnreadableToThisEncoder() {
-        // Pinned deliberately, and narrowed to Chinese after measurement: Hindi and Urdu come
-        // back at only 3-5% unknown tokens, because WordPiece decomposes their words into the
-        // handful of Devanagari and Arabic characters the vocabulary happens to contain. That is
-        // *worse* than a high unknown rate, not better — the embeddings for those characters
-        // were distilled from English text and carry no meaning, so the encoder produces
-        // confident nonsense instead of admitting it cannot read the input.
+    fun everyScriptIsReadableByTheShippedEncoder() {
+        // The inverse of the test this replaces. The English table left Chinese at 68% unknown
+        // tokens and decomposed Hindi and Urdu into characters whose embeddings meant nothing;
+        // the multilingual vocabulary reads all of them. A regression here means a language of
+        // users silently stopped being understood, which is invisible from an English device.
         val vocabulary = context.assets
             .open(StaticEmbeddingAnalyzer.VOCAB_ASSET)
             .bufferedReader()
@@ -157,7 +264,7 @@ class RealWorldMultilingualTest {
         val tokenizer = WordPieceTokenizer(vocabulary)
         val unknownId = vocabulary.indexOf("[UNK]")
 
-        for (lang in listOf(Lang.CHINESE)) {
+        for (lang in Lang.entries) {
             val cases = CASES.filter { it.lang == lang }
             var unknown = 0
             var total = 0
@@ -172,9 +279,8 @@ class RealWorldMultilingualTest {
             val rate = unknown * 100.0 / total
             Log.i(TAG, "$lang unknown-token rate ${"%.1f".format(rate)}%")
             assertTrue(
-                "$lang unknown rate is ${"%.1f".format(rate)}%, so this encoder cannot read it; " +
-                    "if that has changed, rewrite this test",
-                rate > 50.0,
+                "$lang is ${"%.1f".format(rate)}% unknown tokens; the encoder cannot read it",
+                rate < 2.0,
             )
         }
     }
@@ -185,9 +291,9 @@ class RealWorldMultilingualTest {
         /**
          * Measured on 2026-07-30, and the number this test exists to protect.
          *
-         * 4 of 11. See `docs/MODEL_STRATEGY.md` for what is missing and why.
+         * 6 of 11. See `docs/MODEL_STRATEGY.md` for what is still missing and why.
          */
-        const val ENGLISH_RECALL_BASELINE = 4
+        const val ENGLISH_RECALL_BASELINE = 6
 
         val CASES = listOf(
             // ---------- English ----------

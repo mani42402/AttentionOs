@@ -47,13 +47,6 @@ class PriorityEngine(
         ) {
             score -= 0.10f
         }
-        if (
-            context.focusModeEnabled &&
-            !hasStrongUrgency &&
-            analysis.category !in AttentionPolicy.neverSuppressCategories
-        ) {
-            score -= 0.17f
-        }
 
         // Hard floors are independent of model confidence and user history.
         score = when {
