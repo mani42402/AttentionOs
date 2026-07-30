@@ -136,7 +136,14 @@ The classifier is stage 5 rather than the whole decision, because it measures 48
 unlike anything it was written for while a rule the user wrote is right every time. Its errors now
 land only on notifications no rule and no engagement history had an opinion about.
 
-Stages 1, 3 and 4 do not exist yet; the plan document tracks what does.
+Stage 1 is a full condition/action rule engine — app, sender, text, regex, time, day, Android
+category, ongoing, group summary, our own priority band, phone state, notification flooding and
+learned sender engagement, combined with AND/OR/NOT, against actions for alerting, sound, vibration,
+repeat-until-seen, mute, snooze, batch, band adjustment and auto-reply. `docs/PLAN_RULES_FIRST.md`
+carries the full matrix and marks each item as shipped, planned, an edge over competitors, a gap, or
+pending a device spike.
+
+Stages 1, 3 and 4 do not exist yet.
 
 ### Learning does not depend on the user visiting the app
 

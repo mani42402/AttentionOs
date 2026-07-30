@@ -1,410 +1,344 @@
-# Plan: rules first, learning as the suggestion layer
+# Final plan: rules first, learning as the suggestion layer
+
+Legend used throughout:
+
+| mark | meaning |
+|---|---|
+| **[HAVE]** | shipped and verified on device today |
+| **[BUILD]** | planned, with the stage that delivers it |
+| **[EDGE]** | something no competitor in this category does |
+| **[GAP]** | where we are currently behind, with the plan to close it |
+| **[SPIKE]** | not promised until verified on a device |
 
 ## Why the architecture changes
 
 Measurement, not preference. The classifier scores **48% on notifications unlike anything it was
 written for** (`CorpusEvaluationTest.scoreHeldOutCorpus`, 135 cases, 17 languages). Every attempt to
-raise that — more descriptions, a different encoder, confidence abstention — moved along one
-trade-off curve. That is the ceiling of asking a 128-dimensional lookup table "is this important?".
+raise it — more descriptions, a better encoder, confidence abstention — moved along one trade-off
+curve. That is the ceiling of asking a 128-dimensional lookup table "is this important?".
 
-Meanwhile two signals sitting in the same codebase are near-perfectly reliable and were being wasted:
+Two signals in the same codebase are near-perfectly reliable and were being wasted: **a rule the user
+wrote**, which fires correctly every time in any language forever, and **who the person is**, since
+reply-in-under-a-minute beats any sentence match and can never be out-of-vocabulary.
 
-- **A rule the user wrote.** "Ring for Ammi even on silent" fires 100% of the time, in any language,
-  forever. No model, no vocabulary, no drift.
-- **Who the person is.** Reply-in-under-a-minute is a stronger signal than any sentence match, and it
-  cannot be out-of-vocabulary.
-
-BuzzKill (~$3.99, one developer, Android-only, no AI at all) is market proof: it never answers "is
-this important?" — it deletes the question by handing it to the user, and people love it. What it
-lacks is the app *noticing* the pattern and offering the rule. That gap is the product.
-
-So: rules become the backbone, learning becomes the thing that proposes rules, and the classifier
-ranks only what no rule and no person signal covered.
-
-## The invariant that changes, and how it stays honest
-
-Today `AttentionNotificationListener` carries a hard promise:
-
-> Never cancel, replace, snooze, or otherwise modify the source notification.
-
-Mute, snooze and batch break that promise, and it was a good promise. It is replaced by a narrower
-one that keeps the substance:
-
-> **The app never hides a notification on its own judgement. It hides only what the user's own rule
-> tells it to hide, and every such action is logged, visible, and reversible in one tap.**
-
-Concretely, enforced in code rather than by intention:
-
-- `MUTE`, `SNOOZE` and `BATCH` are reachable **only** through a `Rule`. The classifier has no code
-  path to them: the function that cancels a notification takes a `RuleId`, so there is nothing to
-  call without one.
-- A rule's `source` is `USER`, `SUGGESTION_ACCEPTED` or `LEARNED`. Only `LEARNED` can be created
-  without a tap, only in "just handle it" mode, only to quieten, and only past the confidence gates —
-  and it appears in the weekly digest with an undo. A `LEARNED` rule is otherwise an ordinary rule:
-  visible, editable, deletable.
-- Every suppression writes `firedRuleId` onto the event row, so "why did I not see this?" always has
-  an answer.
-- A **Hidden by your rules** screen lists everything suppressed, with the rule that did it and an
-  undo.
-- Safety floors (calls, alarms, verified security and finance) can never be muted by any rule.
-  Attempting it is refused at rule-creation time with a plain explanation.
+BuzzKill is market proof — one developer, no AI, ~$3.99, and people love it — because it deletes the
+question rather than answering it. What it lacks is the app *noticing* the pattern and offering the
+rule. That gap is the product.
 
 ## Target decision pipeline
 
-Strict order, first match wins, and each stage may only be overridden by one above it.
+Strict order, first match wins, each stage overridable only from above.
 
 ```
-1  User rules            person / app / phrase / time  ->  alert-on-silent, vibrate,
-                                                           mute, batch, snooze, auto-reply
-2  Safety floors         calls, alarms, verified security + finance   (nothing may lower these)
-3  Person signal         reply speed, open rate, interaction count    (may raise)
-4  App signal            engagement rate with that package            (may raise)
-5  Message classifier    ~50 descriptions, nearest band               (ranks the remainder)
+1  User rules            everything below, fully user-controlled
+2  Safety floors         calls, alarms, verified security + finance  (nothing may lower these)
+3  Person signal         reply speed, open rate, burst open-order    (may raise)
+4  App signal            engagement with that package                (may raise)
+5  Message classifier    nearest of ~50 descriptions                 (ranks the remainder)
 6  Default               deliver untouched
 ```
 
-The 48% component now does the smallest job instead of the whole job. That is the point: its errors
-land on notifications nothing else had an opinion about.
+The 48% component does the smallest job instead of the whole job, so its errors land only on
+notifications nothing else had an opinion about.
 
-## Learning without the user's help
+## The invariant, restated
 
-The single biggest risk in the previous draft: if the user never opens our app and never corrects
-anything, does the app learn? It has to, because most people will never review anything. And the
-honest finding is that **the passive signal is richer than the review signal** — a normal phone
-generates 50-200 notification interactions a day, against maybe 5 corrections from someone feeling
-helpful.
+Today the listener promises never to modify a source notification. Mute, snooze and batch break that,
+so it becomes narrower but keeps the substance:
 
-So passive learning is primary. Review is an accelerator, not a requirement.
+> **The app never hides a notification on its own judgement. It hides only what a rule says to hide,
+> and every such action is logged, visible and reversible in one tap.**
 
-### What Android gives us for free, per notification
+Enforced structurally, not by intention:
 
-| signal | what it tells us | status |
+- `MUTE`, `SNOOZE` and `BATCH` are reachable **only** through a `Rule`. The cancel function takes a
+  `RuleId`, so no inference path can reach it.
+- `source` is `USER`, `SUGGESTION_ACCEPTED` or `LEARNED`. Only `LEARNED` is created without a tap —
+  in "just handle it" mode only, to quieten only, past the confidence gates only, always in the
+  digest with an undo, and otherwise an ordinary editable rule.
+- Every suppression writes `firedRuleId` to the event row, so "why did I not see this?" always has an
+  answer.
+- Safety floors can never be muted by any rule; attempting it is refused at creation time.
+
+---
+
+# The rule system
+
+This is the section that closes the maturity gap. A rule is **conditions → actions**, with everything
+below available to the user.
+
+## Conditions
+
+Grouped with AND / OR, each negatable, nested one level.
+
+| condition | detail | mark |
 |---|---|---|
-| `REASON_CLICK` | opened it from the shade | used |
-| `REASON_APP_CANCEL` | dealt with it inside the app — read or replied | **fixed this week; was discarded** |
-| `REASON_CANCEL` | one deliberate swipe: a real judgement | used |
-| `REASON_CANCEL_ALL` | bulk tidy: **no** judgement | **fixed this week; was poisoning the data** |
-| `REASON_TIMEOUT` | ignored without even the effort of swiping | not used — weak negative |
-| dwell time (post to removal) | graded interest, not binary | stored, not used as a curve |
-| **open order within a burst** | five pending, which did they open first — a direct ranking preference | **not used** |
-| `Ranking.getImportance()` | the effective importance Android is applying | **not used** |
-| `Ranking.getChannel()` | the channel, including **importance the user themselves lowered** | **not used** |
-| `Ranking.getRank()` | Android's own ordering of the shade | **not used** |
-| hour-of-day of engagement | when they actually respond versus ignore | stored, not aggregated |
+| App | one or many, incl. "any app" | **[BUILD]** S1 |
+| Person / sender | from the notification's `Person` or shortcut identity | **[BUILD]** S1, identity already **[HAVE]** |
+| Text contains / equals / starts / ends | title, body, or either | **[BUILD]** S1 |
+| Regular expression | with a length cap and a match-step budget, so a pasted pattern cannot hang the listener | **[BUILD]** S1 |
+| Time of day | range, multiple ranges per rule | **[BUILD]** S1 |
+| Day of week | any subset | **[BUILD]** S1 |
+| Android's own category | message, call, alarm, event, promo, transport… straight from the notification | **[BUILD]** S1 |
+| Ongoing / progress | so a download bar is never treated as an event | **[HAVE]** as a signal, **[BUILD]** as a condition |
+| Group summary | "+18 new messages" versus a real message | **[BUILD]** S1 |
+| **Our priority band** | condition on what the classifier decided — "if it says NOISE, mute it" | **[BUILD]** S1 **[EDGE]** |
+| Phone state | currently silent / vibrate / DND | **[BUILD]** S2 |
+| **Repeat / flood** | "3rd or later from this app within 10 minutes" — needs stored history, which competitors do not keep | **[BUILD]** S2 **[EDGE]** |
+| **Sender engagement** | "from someone I reply to in under a minute" — a learned condition usable in a hand-written rule | **[BUILD]** S5 **[EDGE]** |
 
-We receive the `RankingMap` on every callback and read nothing from it. The channel one matters most:
-if a user has manually turned an app's channel down in Android settings, **that is the user stating a
-preference in their own words**, and it costs us nothing to honour it.
+## Actions
 
-`Ranking.getUserSentiment()` would tell us Android's own read on whether the user has been dismissing
-a stream, but it may be restricted to the `NotificationAssistantService` role rather than a plain
-listener. **Spike before relying on it** — listed below.
+Several may fire per rule.
 
-### What each signal is allowed to conclude
+| action | detail | mark |
+|---|---|---|
+| Alert always | our own sound on the alarm stream so silent mode does not swallow it | **[BUILD]** S2, **[SPIKE]** for DND |
+| Custom sound | pick any ringtone | **[BUILD]** S2 |
+| Custom vibration | pattern per rule | **[HAVE]** patterns, **[BUILD]** per-rule |
+| Repeat until seen | re-alert every N minutes until opened, capped | **[BUILD]** S2 |
+| Mute | cancel it, logged against the rule | **[BUILD]** S2 |
+| Snooze | `snoozeNotification`, API 26, our whole floor | **[BUILD]** S2 |
+| Batch | hold and repost as one digest at a chosen time | **[BUILD]** S2 |
+| Auto-reply | fill their reply field, fire their intent | **[BUILD]** S3, **[SPIKE]** |
+| Raise / lower band | nudge without silencing | **[BUILD]** S1 |
+| Add sender to VIP | one tap from a rule | **[BUILD]** S4 |
+| Stop processing | explicit allow: this rule wins, later rules do not run | **[BUILD]** S1 |
 
-Aggregated per person and per app, never per single event:
+## Rule management
 
-- **open rate** and **reply speed** -> person importance
-- **timeout rate** and **single-swipe rate** -> a candidate for quietening
-- **open order in a burst** -> relative ranking between two senders, which is what the app is
-  ultimately for
-- **user-lowered channel importance** -> immediate, high-confidence quietening signal
-- **hour-of-day engagement** -> quiet-hours suggestion
+| capability | mark |
+|---|---|
+| Enable / disable without deleting | **[BUILD]** S1 |
+| Explicit ordering, drag to reorder | **[BUILD]** S1 |
+| Duplicate a rule | **[BUILD]** S1 |
+| Match count and last-matched, shown on the rule | **[BUILD]** S1 |
+| Conflict detection — flags two rules that fight | **[BUILD]** S1 |
+| **Preview against your real history** — "this rule would have matched 34 of your last 200 notifications, here they are" **before** saving | **[BUILD]** S1 **[EDGE]** |
+| Export / import rules as JSON | **[BUILD]** S6 |
 
-Confidence gates before any of it acts: at least 5 interactions, at least 80% one-sided, spread over
-at least 3 distinct days. Nothing concluded from a single afternoon.
+**Preview is the one to notice.** We keep an encrypted history; competitors do not. So we can show
+exactly what a rule will do before it does it, against the user's own notifications. Nobody else can
+offer that, because they have nothing to test against.
 
-### Fallback if a user is genuinely inert
+**Export caveat:** sender identities are HMACs keyed to the device, so they cannot be meaningfully
+exported. Person conditions export as display names and are re-resolved on import, with anything
+unmatched clearly listed rather than silently dropped.
 
-Someone who never opens a notification and never swipes gives us nothing but timeouts. In that case
-the app converges on "everything times out, nothing is distinguishable" and does the only honest
-thing: it stays out of the way and keeps the safety floors. It never invents a preference from an
-absence of evidence.
+## Precedence, stated once
 
-## Two kinds of user, one engine
+Explicit `order` first. Ties broken by specificity: person > app + text > app > text > time. Ties
+after that by `createdAt`. Documented, unit tested, and surfaced in the UI — "why did the wrong rule
+win" is the first support question any rule engine generates.
 
-One person wants to configure everything. Another installs the app and expects it to work. They must
-not need different products.
+---
 
-**The engine is identical for both.** The only difference is a single onboarding question:
+# Learning without the user's help
 
-> When I learn something about your notifications:
-> **(a) Just handle it, tell me after** — default
-> **(b) Ask me first**
+Most people will never review anything, so passive learning is primary and review is an accelerator.
+The honest arithmetic: a phone generates 50–200 notification interactions a day against maybe 5
+corrections from someone feeling helpful.
 
-| | Just handle it (default) | Ask me first |
+| signal | tells us | mark |
+|---|---|---|
+| Opened from shade | direct interest | **[HAVE]** |
+| Dealt with inside the app (`REASON_APP_CANCEL`) | read or replied | **[HAVE]** — fixed this week, was discarded entirely |
+| One deliberate swipe | a real judgement | **[HAVE]** |
+| Bulk "clear all" | **no** judgement | **[HAVE]** — fixed this week, was poisoning every sender score |
+| Timed out untouched | ignored without even the effort | **[BUILD]** S5 |
+| Dwell time | graded interest, not binary | stored **[HAVE]**, curve **[BUILD]** S5 |
+| **Open order in a burst** | five waiting, which did they open first — a direct ranking statement | **[BUILD]** S5 **[EDGE]** |
+| **Channel importance the user lowered themselves** | the user already told Android their preference | **[BUILD]** S5 **[EDGE]** |
+| Android's own rank | free ordering hint | **[BUILD]** S5 |
+| Hour-of-day engagement | quiet-hours suggestion | stored **[HAVE]**, aggregate **[BUILD]** S5 |
+
+We receive a `RankingMap` on **every callback and currently read nothing from it**.
+`Ranking.getUserSentiment()` may require the assistant role rather than a plain listener — **[SPIKE]**.
+
+**Confidence gates before anything acts:** ≥ 5 interactions, ≥ 80% one-sided, spread over ≥ 3 distinct
+days. **Inert user fallback:** someone who never opens or swipes gives only timeouts; the app then
+concludes nothing, keeps the safety floors, and stays out of the way. It never invents a preference
+from absent evidence.
+
+# Two kinds of user, one engine
+
+One onboarding question, and that is the whole difference:
+
+> When I learn something: **(a) Just handle it, tell me after** — default, or **(b) Ask me first**
+
+| | Just handle it | Ask me first |
 |---|---|---|
 | passive learning | always on | always on |
-| raising something's priority | applied silently — nothing is hidden, so this cannot lose a notification | applied silently, same reasoning |
-| quietening something | applied, then a single line in a weekly digest: "I quietened Daraz, you ignored 19 of 20. Undo?" | proposed as a suggestion, waits for a tap |
-| creating a rule | created with `source = LEARNED`, visible and deletable | created only on approval |
-| the rule editor | present, never required | present |
-| effort required | zero, forever | as much as they want |
+| raising priority | applied silently — nothing is hidden, so this cannot lose a message | same |
+| quietening | applied, then one line in the weekly digest with an undo | proposed, waits for a tap |
+| rule editor | present, never required | present |
+| effort | zero, forever | as much as wanted |
 
-Two properties make "just handle it" defensible rather than presumptuous:
+---
 
-1. **Raising is free.** Nothing is ever hidden by inference, so a wrong promotion costs one extra
-   buzz — not a lost message.
-2. **Quietening is always attributable and reversible.** Every quietened stream appears in *Hidden by
-   your rules* with the evidence that caused it and one-tap undo. A user who never looks is not worse
-   off than they were with no app; a user who looks can reverse anything in a tap.
+# Closing the gaps
 
-The mode is switchable at any time, and switching to "ask me" does not undo what was already learned —
-it only changes what happens next.
+Each **[GAP]** with what actually closes it.
 
-## Stages
+### Rule-engine maturity — they have years of shipped edge cases
 
-Each stage ships on its own and leaves the app working. No stage depends on a later one.
+**Closes at Stage 1–2.** The condition and action matrix above meets or exceeds their published
+feature set, and three conditions (our band, flood detection, sender engagement) plus rule preview go
+beyond it. What we will still lack is field-hardening, which only shipping earns — so Stage 1 carries
+an unusually heavy test suite: every condition type, every combinator, precedence, and conflict cases.
 
-### Stage 1 — rule model and engine (backbone)
+### Size — 18 MB against their ~7 MB
 
-- `rules` table, encrypted with the rest of the database. Schema v10.
-- `RuleEngine.evaluate(signal, senderHash, now): RuleMatch?` — pure, no Android dependencies, unit
-  testable without a device.
-- Deterministic precedence when several rules match: explicit `order` column, ties broken by
-  specificity (person > app+phrase > app > phrase > time), then by `createdAt`. Documented and tested,
-  because "why did the wrong rule win" is the first support question a rule engine generates.
-- Indexed lookup by `packageName` and `senderHash`, so evaluation cost is proportional to *matching*
-  rules rather than to how many the user has. Budget: < 0.5 ms at 100 rules, asserted in a test.
-- No UI yet. Rules are created in tests.
+**Partly closes, honestly.** 13 MB of ours is the multilingual embedding table, and it is the price of
+working outside English — which they do not do at all. Actions taken:
 
-**Exit:** engine unit tests including precedence and conflict cases; measured evaluation cost; schema
-v10 migration test.
+- App Bundle so Play strips unused densities and languages per device **[BUILD]** S6
+- R8 full mode and resource shrinking **[HAVE]**
+- No inference runtime, no charting library, no Lottie, no icon pack **[HAVE]**
 
-### Stage 2 — actions
+We will not reach 7 MB without dropping multilingual support, and that would be trading our main
+advantage for a number nobody uninstalls over. Stated plainly rather than engineered around.
 
-- `ALERT_ALWAYS` — our own sound on the alarm stream so it survives silent mode.
-- `VIBRATE_PATTERN` — reuses the existing `InterruptionController` patterns.
-- `MUTE` — `cancelNotification(key)`, event row marked with the rule.
-- `SNOOZE` — `snoozeNotification(key, minutes)`, API 26, our whole floor.
-- `BATCH` — cancel, store, repost as one summary at a chosen time via the existing WorkManager setup.
-- **Hidden by your rules** screen with undo.
+### Price — $3.99 once against a subscription
 
-**Exit:** each action verified on device; instrumented test that a muted notification is recorded with
-its rule id; instrumented test that a safety-floor notification cannot be muted.
+**Closes at Stage 6.** Rules are table stakes and ship **free**, including every condition and action
+above. Paid covers what cannot be copied by adding a text field: passive learning, suggestions,
+insights, and later cross-device sync. A **lifetime option** ships alongside the subscription, because
+Android buyers demonstrably prefer one-time purchases and pretending otherwise costs sales.
 
-### Stage 3 — reply
+### Power users are better served by them today
 
-Messaging apps attach their own reply action with a `RemoteInput`. We fill that field and fire *their*
-`PendingIntent`. **The message is sent by WhatsApp, through WhatsApp.** Our app has no `INTERNET`
-permission and cannot send anything itself — that is worth saying in the store listing.
+**Closes at Stage 1 + S6.** Full condition/action matrix, ordering, duplication, enable-disable,
+conflict detection, JSON export/import, and rule preview against real history. After Stage 6 the
+power user has strictly more, not less.
 
-- Capability detection per notification: does it carry an action with `remoteInputs`?
-- Inline reply from our review screen.
-- Rule action `AUTO_REPLY` with a fixed text, **off by default**, opt-in per rule.
-- Replying marks the notification handled, which feeds the person signal.
+### iOS
 
-Deliberate limits, stated in the UI rather than discovered: text only; only apps that expose a reply
-action; a notification already dismissed cannot be replied to.
+**Does not close, for anyone.** iOS exposes no notification-read API to third parties; that is why
+every app in this category is Android-only. Not a gap — a platform fact.
 
-**Exit:** verified against WhatsApp, Telegram and SMS on device; graceful message when unsupported.
+---
 
-### Stage 4 — onboarding seed
+# Permissions, and asking rather than assuming
 
-- Up to **5 people** you must never miss, up to **3 always-alert apps**. Everything skippable.
-- Each selection creates a visible, editable rule — so the user's first experience of a rule is one
-  they made without writing anything.
-- Skipping is a first-class path: the app runs in pure observation.
-- Contact picker needs `READ_CONTACTS`, which is a real privacy cost. **Fallback: seed from senders
-  already seen in the shade, no permission required.** Contacts stays an optional convenience.
-
-**Exit:** onboarding creates working rules; skipping leaves a functional app; no new mandatory
-permission.
-
-### Stage 5 — the suggestion layer (the differentiator)
-
-The learning stops acting silently and starts proposing.
-
-- Evidence thresholds before any suggestion: ≥ 5 interactions, ≥ 80% one-sided, ≥ 3 distinct days.
-  Nothing suggested from a single afternoon.
-- Suggestion kinds: promote a person, quieten an app, batch an app, quiet-hours pattern.
-- "You reply to Bilal within a minute, every time. Ring on silent for him?" → one tap creates a rule
-  he can see, edit and delete.
-- **Never more than 2 pending suggestions**, never re-proposed once dismissed, permanently.
-- Accepted suggestions become rules with `source = SUGGESTION_ACCEPTED`, indistinguishable afterwards
-  from ones the user wrote — including deletable.
-
-**Exit:** suggestions generated from a replayed engagement history in an instrumented test; dismissal
-is permanent; cap respected.
-
-### Stage 6 — insights instead of a feed
-
-Replace the scrolling list as the primary surface.
-
-- "Learned 3 people who matter to you."
-- "Daraz: 9 of 10 swiped away. Keep it quiet?"
-- "Your quietest hours are 2–5pm."
-- Progress toward personalisation, and what it changed.
-
-The full list stays, one tap away, for auditing.
-
-**Exit:** dual-theme review; accessibility assertions extended to the new surfaces.
-
-## Honestly, versus BuzzKill and the rest
-
-No promises. What is verifiable, what is a real weakness, and what is only a plan until it ships.
-
-### Where we genuinely win
-
-**They learn nothing.** BuzzKill is a rule engine — that is its design, not a gap in it. Write no
-rule and it does nothing at all. FilterBox is the same. Google's Modes are per-app switches. For the
-majority of users who will never author a rule, every competitor does nothing and we do something.
-This is the whole argument, and it is verifiable from their own feature lists.
-
-**Nobody proposes rules.** "You reply to Bilal within a minute, every time — ring on silent for him?"
-does not exist in this category. It is the feature that turns a power-user tool into something an
-ordinary person benefits from.
-
-**Per-person reply-speed priority.** A rule can say "always alert for Ammi". None of them can rank
-Ammi above Bilal because you answer her faster, without being told.
-
-**Encrypted history.** Ours is SQLCipher with an Android Keystore-wrapped key, verified on device.
-I have not audited how competitors store theirs and will not claim they are worse — but none of them
-advertise encryption at rest, and we can state ours precisely.
-
-**Language.** Their phrase rules are literal strings: "urgent" needs a separate rule for
-`فوری`, `तुरंत`, `jaldi`. Our phrase rules do the same, but the semantic layer additionally reads 17
-languages at 0% unknown tokens. Presented as an assist, because at 48% on unseen material it is not
-a headline.
-
-### Where we lose, and should say so internally
-
-**Their rule engine is more mature.** Shipped, reviewed, years of edge cases. Stages 1-3 reach parity
-on the core; the long tail of trigger and action combinations will take longer.
-
-**They are smaller and cheaper.** ~7 MB against our 18 MB, and $3.99 once against a subscription. Our
-13 MB is the multilingual table, which is the price of working outside English.
-
-**A power user who enjoys writing rules is better served by them today.** That is a real segment and
-we should not pretend otherwise. Our answer is the user who does not want to write rules at all.
-
-### Feature-by-feature answer
-
-| what they do | our answer | honest status |
+| permission | needed for | approach |
 |---|---|---|
-| ring on silent for chosen people | same, alarm stream | Stage 2, **pending DND spike** |
-| custom vibration per rule | same, patterns already exist | Stage 2 |
-| mute / dismiss automatically | same, but only from a user or learned rule, always logged | Stage 2 |
-| snooze | same, `snoozeNotification`, API 26 | Stage 2 |
-| batch into a digest | same, existing WorkManager | Stage 2 |
-| auto-reply | same, their reply field and their intent | Stage 3, **pending RemoteInput spike** |
-| keyword / phrase rules | same, plus semantic matching across languages | Stage 1 + existing |
-| time-based rules | same | Stage 1 |
-| per-app rules | same | Stage 1 |
-| — | **learns with no input at all** | Stages 5, passive signals |
-| — | **proposes rules from evidence** | Stage 5 |
-| — | **ranks people by how you actually behave** | Stages 3-5 |
-| — | **encrypted history and real deletion** | shipped |
-| — | **works with no network permission** | shipped |
-| iOS | not possible for anyone — iOS exposes no notification-read API | n/a |
+| Notification access | everything | required, explained at onboarding **[HAVE]** |
+| `POST_NOTIFICATIONS` | our own alerts and digests | asked when first needed **[HAVE]** |
+| **Do Not Disturb access** | letting an "alert always" rule through DND | **asked in context** — only when a user creates their first such rule, with a plain sentence on exactly what breaks without it, and a working degraded mode either way **[BUILD]** S2 |
+| Contacts | nicer VIP picker | **optional**; fallback picks from senders already seen, needing no permission **[BUILD]** S4 |
+| INTERNET | — | **never requested**, so the app is structurally incapable of sending anything anywhere **[HAVE]** |
 
-### The one-sentence positioning
+On alarms specifically: playing on the alarm stream survives silent mode. Whether it survives DND
+without the policy grant is **[SPIKE] 1**. If it does not, the rule shows "limited during Do Not
+Disturb" with a one-tap grant, and still works everywhere else.
 
-Every competitor is a tool you must operate. This is a tool that watches how you already behave and
-offers to do the operating for you — and if you would rather operate it yourself, it does that too.
+# Reply
 
-## Fallbacks
+Messaging apps attach their own reply action carrying a `RemoteInput`. We fill that field and fire
+**their** `PendingIntent`, so **WhatsApp sends the message through WhatsApp**. We hold no INTERNET
+permission and cannot send anything ourselves — that belongs in the store listing.
 
-Every layer degrades to the one below rather than failing.
+Inline reply from our screen, plus `AUTO_REPLY` as a rule action: **off by default**, opt-in per rule,
+confirmation on first use, never to a sender with no history, every send logged, global kill switch.
+Limits stated in the UI rather than discovered: text only, only apps exposing a reply action, and a
+notification already dismissed cannot be replied to. **[SPIKE] 2** covers WhatsApp, Telegram, SMS and
+Slack on Android 15/16.
+
+---
+
+# Stages
+
+Each ships alone and leaves the app working.
+
+**S1 — rule model and engine.** Schema v10. Pure-Kotlin `RuleEngine`, no Android dependencies, unit
+testable. Every condition, combinator, precedence and conflict case tested. Indexed by package and
+sender so cost is proportional to *matching* rules; budget < 0.5 ms at 100 rules, asserted.
+
+**S2 — actions and rule UI.** Alert-always, custom sound, vibration, repeat-until-seen, mute, snooze,
+batch, raise/lower. Rule editor with preview against real history. *Hidden by your rules* screen with
+undo, present from the start rather than added later. Contextual DND grant.
+
+**S3 — reply.** Capability detection, inline reply, `AUTO_REPLY` with the safeguards above.
+
+**S4 — onboarding seed.** Up to 5 people, up to 3 always-alert apps, all skippable, each creating a
+visible editable rule. Contacts optional.
+
+**S5 — passive learning and suggestions.** The signals table above. Suggestion kinds: promote a
+person, quieten an app, batch an app, quiet-hours. Max 2 pending, permanently dismissible.
+
+**S6 — insights, export, packaging.** Progress and findings instead of a feed. JSON rule
+export/import. App Bundle, lifetime pricing tier.
+
+# Fallbacks
 
 | failure | behaviour |
 |---|---|
-| rule engine throws | logged, skipped, fall through to safety floors — a bad rule never blocks a notification |
-| two rules conflict | documented precedence resolves it; the UI flags the pair so the user can reorder |
-| notification policy access not granted | alert-on-silent uses the alarm stream; if DND still gates it, the rule is marked "limited" in the UI with what is missing and a link to grant it |
-| `snoozeNotification` unavailable or refused | fall back to `MUTE` + a batched repost |
-| no reply action on the notification | inline reply hidden, "Open conversation" offered instead |
-| auto-reply target already dismissed | skipped, recorded, never retried blindly |
-| embedding table corrupt or absent | keyword analyser only, already implemented and tested |
-| keystore invalidated | typed error, guided re-provision, never a silent wipe (already implemented) |
-| suggestion engine produces nonsense | in "ask me" mode it can only propose; in "just handle it" mode it may only quieten with evidence, always logged and reversible |
-| user never interacts with anything | timeouts are the only signal; the app converges on "nothing is distinguishable", keeps the safety floors, and stays out of the way. It never invents a preference from absent evidence |
-| user interacts but never opens our app | passive learning is unaffected — it needs no visit. The weekly digest is a notification, not a screen |
-| `Ranking.getUserSentiment()` restricted to the assistant role | dropped; the other eleven passive signals do not depend on it |
-| classifier wrong | it is stage 5 of 6, and nothing it decides can hide anything |
+| rule engine throws | logged, skipped, falls through to safety floors — a bad rule never blocks a notification |
+| regex pathological | step budget aborts the match, rule marked faulty in the UI, notification delivered |
+| two rules conflict | documented precedence resolves it; UI flags the pair to reorder |
+| DND access refused | alarm stream only; rule shows "limited during Do Not Disturb" with a one-tap grant |
+| `snoozeNotification` refused | falls back to mute plus a batched repost |
+| no reply action present | inline reply hidden, "Open conversation" offered |
+| auto-reply target already gone | skipped, recorded, never blindly retried |
+| `getUserSentiment` restricted | dropped; the other ten passive signals do not depend on it |
+| embedding table corrupt | keyword analyser only **[HAVE]**, already tested |
+| keystore invalidated | typed error and guided restore, never a silent wipe **[HAVE]** |
+| user never interacts at all | concludes nothing, keeps safety floors, stays out of the way |
+| user never opens our app | passive learning is unaffected; the digest is a notification, not a screen |
+| classifier wrong | it is stage 5 of 6 and can hide nothing |
 
-## Risks, and what actually mitigates them
+# Risks
 
-**Auto-reply sends something wrong to the wrong person.** The highest-consequence feature in the
-plan. Off by default; opt-in per rule; confirmation on first use; never to a sender with no history;
-every auto-reply logged and visible; global kill switch in Settings.
+**Auto-reply sending the wrong thing** — highest consequence here. Off by default, opt-in per rule,
+first-use confirmation, never to unknown senders, logged, global kill switch.
 
-**Rules become a power-user maze.** This is what makes BuzzKill hard for ordinary users. Mitigation:
-nobody has to write one — onboarding and suggestions create them. The rule editor is the advanced
-path, not the front door.
+**Rules becoming a maze** — exactly what makes BuzzKill hard for ordinary people. Nobody has to write
+one: onboarding and suggestions create them. The editor is the advanced path, not the front door.
 
-**Suggestion nagging.** Two pending maximum, permanent dismissal, evidence thresholds above.
+**First wrongly hidden notification destroys trust** — only rules can hide; *Hidden by your rules*
+with undo exists from S2, not retrofitted.
 
-**Trust damage from the first wrongly hidden notification.** Only user rules can hide; the Hidden
-screen and one-tap undo exist from Stage 2, not added later.
+**Scope** — six stages is a lot. Each is independently shippable and S1–S2 alone reach core parity.
 
-**Scope.** Six stages is a lot. Each is independently shippable, and Stages 1–2 alone match
-BuzzKill's core.
+# Spikes, before building on any of it
 
-## Spikes to run before committing to Stage 2 and 3
+1. **Alarm stream versus Do Not Disturb** — does it survive without `ACCESS_NOTIFICATION_POLICY`, and
+   what exactly is lost if refused. Half a day.
+2. **`RemoteInput` across real apps** — WhatsApp, Telegram, SMS, Slack on Android 15/16. Half a day.
+3. **`Ranking` fields from a plain listener** — which of importance, channel, rank, sentiment we may
+   read. The channel one is the most valuable passive signal in this plan. Half a day.
 
-Two things I will not promise until verified on a device:
+Any failure changes the plan, and it is far cheaper to learn now.
 
-1. **Alarm-stream audio versus Do Not Disturb.** Whether it survives DND without
-   `ACCESS_NOTIFICATION_POLICY`, and what exactly is lost when that grant is refused. Half a day.
-2. **`RemoteInput` reply across real apps.** WhatsApp, Telegram, SMS, Slack — which expose a reply
-   action, and whether firing it works from a listener on Android 15/16. Half a day.
-
-3. **`Ranking` access from a plain listener.** Which of `getImportance`, `getChannel`, `getRank` and
-   `getUserSentiment` a non-assistant listener may actually read on Android 15/16. The channel one is
-   the most valuable passive signal in the plan — a user who lowered an app's channel themselves has
-   already told us what they want. Half a day.
-
-If any fails the plan changes, and it is cheaper to learn that now than after building on it.
-
-## Schema
-
-Version 10. Additive only, so the migration cannot lose data.
+# Schema v10, additive only
 
 ```
 rules
   id, enabled, name, order,
-  triggerType     PERSON | APP | PHRASE | TIME | COMPOSITE
-  senderHash?, packageName?, phrase?, startMinute?, endMinute?, daysMask?
-  action          ALERT_ALWAYS | VIBRATE | MUTE | BATCH | SNOOZE | AUTO_REPLY
-  actionPayload?  reply text, snooze minutes, pattern id
-  source          USER | SUGGESTION_ACCEPTED | LEARNED
-  evidenceJson?   what the app observed, shown to the user for LEARNED rules
-  createdAt, matchCount, lastMatchedAt        <- so the user can see it working
+  conditionsJson    condition tree: AND/OR/NOT over the condition table above
+  actionsJson       one or more actions with payloads
+  source            USER | SUGGESTION_ACCEPTED | LEARNED
+  evidenceJson?     what was observed, shown for LEARNED rules
+  createdAt, matchCount, lastMatchedAt
 
 suggestions
   id, kind, subjectHash?, packageName?, evidenceJson,
   proposedRuleJson, state PENDING | ACCEPTED | DISMISSED, createdAt
 
 notification_events
-  + firedRuleId?          <- the audit trail for every suppression
+  + firedRuleId?    the audit trail for every suppression
 ```
 
-`phrase` is user-authored content and lives in the encrypted database like everything else.
+Conditions are stored as a JSON tree rather than columns because the shape is a tree; it lives in the
+encrypted database like everything else, and user-authored text never leaves it.
 
-## Pricing consequence
-
-Rules are table stakes against a $3.99 competitor, so they belong in the free tier. What a paid tier
-can honestly charge for is the part nobody can copy by adding a text field: the passive learning, the
-suggestions, the insights, and later cross-device sync. That also aligns the incentive correctly — we
-get paid for the app understanding the user, not for withholding a switch.
-
-## Docs to update as each stage lands
-
-- `docs/ARCHITECTURE.md` — the six-stage pipeline replaces the current score-then-threshold section
-- `docs/RULES.md` — new: trigger and action reference, precedence, worked examples
-- `docs/SCHEMA.md` — v10 tables and migration
-- `docs/MODEL_STRATEGY.md` — record that the classifier moved to stage 5 and why
-- `README.md` — reply mechanics and the "we cannot send anything, we have no network permission" claim
-
-## Overall exit criteria
+# Exit criteria
 
 - `testDebugUnitTest`, `lintDebug`, `connectedDebugAndroidTest` green
-- held-out recall not regressed — rules must not be a way to quietly lower the bar on the classifier
-- a muted notification is always attributable to a rule, asserted by test
-- no new mandatory permission; contacts and notification-policy access both optional with stated
-  degradation
-- a user who never opens the app still accumulates person and app signal — asserted by an
-  instrumented test that replays a notification history with zero visits to any screen
-- every `LEARNED` rule carries the evidence that created it, and undo restores the previous state
-- release build verified on device, and the size budget still under 30 MB
+- held-out classifier recall not regressed — rules must not become a way to quietly lower the bar
+- every muted notification attributable to a rule, asserted by test
+- a user who never opens the app still accumulates person and app signal, asserted by an instrumented
+  test that replays a history with zero screen visits
+- no new mandatory permission; DND and contacts both optional with stated degradation
+- release verified on device, size still under the 30 MB budget
