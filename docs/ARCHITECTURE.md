@@ -98,18 +98,60 @@ When Attention Mode is disabled, the listener clears its hint and source applica
 normal notification effects. Notification keys are deduplicated for 30 seconds so an app updating
 the same notification does not create repeated AttentionOS alerts.
 
+## Package layout
+
+```text
+app/src/main/java/com/attentionos/
+├── core/common/   shared constants (time, scheduling limits)
+├── core/di/       AppContainer, the manual dependency graph
+├── data/db/       Room database, DAO, entities, migrations, list projections
+├── data/settings/ DataStore-backed preferences
+├── data/repository/ decision recording, feedback, hashing
+├── domain/        priority engine, shared AttentionPolicy, models
+├── ai/            ONNX analyzer and WordPiece tokenizer
+├── service/       notification listener, reminder and retention workers
+├── training/      local personalized classifier and export
+└── ui/            theme, components, navigation, and one package per screen
+```
+
+`AttentionPolicy` is the single source of truth for the score ladder, the never-suppress category
+set, and the queueing rule. These were previously duplicated between the scoring engine and the
+personalization policy, where divergence would silently change safety behaviour.
+
 ## Memory and CPU budget
 
 - No polling, wake lock, foreground service, or always-running model.
-- One supervisor coroutine scope per listener lifetime.
-- A bounded 32-entry app-label cache.
+- One application-lifetime coroutine scope, plus one supervisor scope per listener lifetime.
+- Bounded caches: 32 app labels, 64 alert-dedup keys, 64 embeddings (~100KB).
 - Input text capped at 2,000 characters.
-- Indexed timestamp and sender fields.
-- Recent UI queries capped at 60 rows.
-- Daily, idle-only retention work.
+- Each forward pass is sized to the input. The model declares a symbolic sequence axis, so
+  encoding buckets to 16/32/64 tokens rather than always padding to 64.
+- Repeated text is not re-embedded; apps that update a notification in place cost no inference.
+- Indexed on `postedAt`, `senderHash`, `priority`, `queued`, and `(action, postedAt)`.
+- Recent UI queries capped at 60 rows and served from a projection that excludes the embedding
+  blob; the latency average is bounded to 7 days.
+- Daily battery-aware retention work (not idle-gated, which starves on active devices).
 - Up to six optional battery-aware daily review jobs; no custom timer or polling loop.
-- Per-event inference timing persisted as a single integer and aggregated in SQL.
-- UI motion can be disabled; continuous ambient and protection animations are not composed when off.
+- Reminder scheduling is a no-op when the stored schedule has not changed.
+- UI motion can be disabled; continuous ambient animations are not composed when off.
+
+## Measured size
+
+Universal release APKs overstate delivery size because Android stores native libraries
+uncompressed so they can be mapped without extraction. The figure that matters is the bundle
+Play consumes.
+
+| Artifact | Size |
+|---|---|
+| Release AAB (what Play ingests) | 25.4 MB |
+| Universal release APK (local only) | 46 MB |
+| `libonnxruntime.so` | 26.7 MB stored, 9.8 MB compressed |
+| MiniLM model asset | 16.7 MB |
+
+The ONNX Runtime native library is larger than the model it runs. That is the strongest argument
+for the static-embedding evaluation planned for the design phase: adopting a token-lookup model
+would remove the runtime entirely and shrink the model, taking the bundle to roughly a third of
+its current size.
 
 ## Interface system
 

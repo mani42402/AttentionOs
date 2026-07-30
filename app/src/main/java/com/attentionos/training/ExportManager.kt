@@ -3,7 +3,7 @@ package com.attentionos.training
 import android.content.Context
 import android.net.Uri
 import androidx.core.content.FileProvider
-import com.attentionos.data.AttentionRepository
+import com.attentionos.data.repository.AttentionRepository
 import java.io.File
 import android.util.Base64
 import kotlinx.coroutines.Dispatchers

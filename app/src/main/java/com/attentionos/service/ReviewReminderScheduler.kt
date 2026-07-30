@@ -1,5 +1,6 @@
 package com.attentionos.service
 
+import com.attentionos.core.common.TimeConstants
 import android.content.Context
 import androidx.work.Constraints
 import androidx.work.ExistingPeriodicWorkPolicy
@@ -10,20 +11,35 @@ import java.time.ZonedDateTime
 import java.util.concurrent.TimeUnit
 
 object ReviewReminderScheduler {
+
+    /**
+     * Fingerprint of the schedule this process last applied.
+     *
+     * The settings flow re-emits on every process start, and [sync] cancels and rebuilds every
+     * reminder task. Without this guard each launch rewrote the WorkManager database and reset
+     * the reminder schedule even when nothing had changed.
+     */
+    @Volatile
+    private var appliedFingerprint: String? = null
+
     fun sync(context: Context, enabled: Boolean, times: Set<Int>) {
+        val normalizedTimes = times
+            .filter { it in 0 until TimeConstants.MINUTES_PER_DAY }
+            .distinct()
+            .sorted()
+            .take(TimeConstants.MAX_DAILY_REMINDERS)
+        val fingerprint = "$enabled:${normalizedTimes.joinToString(",")}"
+        if (fingerprint == appliedFingerprint) return
+
         val workManager = WorkManager.getInstance(context)
         workManager.cancelAllWorkByTag(WORK_TAG)
         workManager.cancelUniqueWork(LEGACY_WORK_NAME)
         if (!enabled) {
+            appliedFingerprint = fingerprint
             return
         }
         val now = ZonedDateTime.now()
-        times
-            .asSequence()
-            .filter { it in 0 until MINUTES_PER_DAY }
-            .distinct()
-            .sorted()
-            .take(MAX_DAILY_REMINDERS)
+        normalizedTimes
             .forEach { minuteOfDay ->
                 val request = PeriodicWorkRequestBuilder<ReviewReminderWorker>(
                     24,
@@ -44,10 +60,16 @@ object ReviewReminderScheduler {
                     request,
                 )
             }
+        appliedFingerprint = fingerprint
+    }
+
+    /** Test-only: clears the memoised schedule so each case starts from a clean slate. */
+    internal fun resetForTesting() {
+        appliedFingerprint = null
     }
 
     internal fun initialDelayMillis(now: ZonedDateTime, minuteOfDay: Int): Long {
-        val normalized = minuteOfDay.coerceIn(0, MINUTES_PER_DAY - 1)
+        val normalized = minuteOfDay.coerceIn(0, TimeConstants.MINUTES_PER_DAY - 1)
         var next = now
             .withHour(normalized / 60)
             .withMinute(normalized % 60)
@@ -60,6 +82,4 @@ object ReviewReminderScheduler {
     private const val LEGACY_WORK_NAME = "attention-daily-review"
     private const val WORK_NAME_PREFIX = "attention-review"
     private const val WORK_TAG = "attention-review-reminder"
-    private const val MINUTES_PER_DAY = 24 * 60
-    private const val MAX_DAILY_REMINDERS = 6
 }

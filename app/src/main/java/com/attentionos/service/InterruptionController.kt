@@ -7,7 +7,7 @@ import android.os.Build
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
-import com.attentionos.data.AppSettings
+import com.attentionos.data.settings.AppSettings
 import com.attentionos.domain.AttentionPriority
 
 class InterruptionController(private val context: Context) {

@@ -1,4 +1,4 @@
-package com.attentionos.data.local
+package com.attentionos.data.db
 
 import androidx.room.Entity
 import androidx.room.Index
@@ -10,6 +10,9 @@ import androidx.room.PrimaryKey
         Index("notificationKey", unique = true),
         Index("postedAt"),
         Index("senderHash"),
+        Index("priority"),
+        Index("queued"),
+        Index(value = ["action", "postedAt"]),
     ],
 )
 data class NotificationEventEntity(

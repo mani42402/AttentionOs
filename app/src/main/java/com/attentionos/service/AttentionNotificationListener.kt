@@ -2,11 +2,12 @@ package com.attentionos.service
 
 import android.app.Notification
 import android.os.Build
+import android.os.SystemClock
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import android.util.LruCache
 import com.attentionos.AttentionApplication
-import com.attentionos.data.UserAction
+import com.attentionos.data.repository.UserAction
 import com.attentionos.domain.NotificationSignal
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -14,6 +15,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
@@ -50,30 +52,43 @@ class AttentionNotificationListener : NotificationListenerService() {
         if (sbn.packageName == packageName) return
         if (notification.flags and Notification.FLAG_GROUP_SUMMARY != 0) return
 
-        val extras = notification.extras
-        val title = extras.getCharSequence(Notification.EXTRA_TITLE)?.toString()?.take(MAX_TEXT)
-        val text = (extras.getCharSequence(Notification.EXTRA_BIG_TEXT)
-            ?: extras.getCharSequence(Notification.EXTRA_TEXT))
-            ?.toString()
-            ?.take(MAX_TEXT)
-        val signal = NotificationSignal(
-            packageName = sbn.packageName,
-            title = title,
-            text = text,
-            postedAt = sbn.postTime,
-            isConversation = notification.category == Notification.CATEGORY_MESSAGE ||
-                (
-                    Build.VERSION.SDK_INT >= Build.VERSION_CODES.P &&
-                        extras.getBoolean(Notification.EXTRA_IS_GROUP_CONVERSATION)
-                    ),
-            isOngoing = sbn.isOngoing,
-            categoryHint = notification.category,
-        )
+        // This callback runs on the main thread. Capture only cheap references here and do the
+        // extras unparcel plus the string copies on a worker, so a notification burst cannot
+        // stall the UI.
         val key = sbn.key
-        val settings = container.currentSettings.value
         val sourcePackage = sbn.packageName
+        val postedAt = sbn.postTime
+        val isOngoing = sbn.isOngoing
 
         serviceScope.launch {
+            val extras = notification.extras
+            val title = extras.getCharSequence(Notification.EXTRA_TITLE)
+                ?.toString()
+                ?.take(MAX_TEXT)
+            val text = (
+                extras.getCharSequence(Notification.EXTRA_BIG_TEXT)
+                    ?: extras.getCharSequence(Notification.EXTRA_TEXT)
+                )?.toString()?.take(MAX_TEXT)
+
+            val signal = NotificationSignal(
+                packageName = sourcePackage,
+                title = title,
+                text = text,
+                postedAt = postedAt,
+                isConversation = notification.category == Notification.CATEGORY_MESSAGE ||
+                    (
+                        Build.VERSION.SDK_INT >= Build.VERSION_CODES.P &&
+                            extras.getBoolean(Notification.EXTRA_IS_GROUP_CONVERSATION)
+                        ),
+                isOngoing = isOngoing,
+                categoryHint = notification.category,
+            )
+
+            // Suspend for the stored settings rather than reading the hot flow's current value:
+            // during the window before DataStore's first emission that value is still defaults,
+            // which would classify early notifications with focus mode and content storage off.
+            val settings = container.settingsRepository.settings.first()
+
             val decision = container.attentionRepository.processPosted(
                 key = key,
                 appLabel = appLabel(sourcePackage),
@@ -98,9 +113,10 @@ class AttentionNotificationListener : NotificationListenerService() {
             REASON_CANCEL, REASON_CANCEL_ALL -> UserAction.DISMISSED
             else -> return
         }
-        val settings = container.currentSettings.value
+        val key = sbn.key
         serviceScope.launch {
-            container.attentionRepository.recordAction(sbn.key, action, settings)
+            val settings = container.settingsRepository.settings.first()
+            container.attentionRepository.recordAction(key, action, settings)
         }
     }
 
@@ -111,7 +127,8 @@ class AttentionNotificationListener : NotificationListenerService() {
     }
 
     private fun shouldAlert(key: String): Boolean {
-        val now = System.currentTimeMillis()
+        // Monotonic: a wall-clock change (timezone, NTP correction) must not defeat dedup.
+        val now = SystemClock.elapsedRealtime()
         val previous = alertedKeys[key]
         if (previous != null && now - previous < ALERT_DEDUPLICATION_MILLIS) return false
         alertedKeys.put(key, now)

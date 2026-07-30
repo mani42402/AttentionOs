@@ -71,9 +71,6 @@ By default the app stores:
 - a truncated SHA-256 hash representing the app/sender pair;
 - interaction label and response time.
 
-Notification title and message content are stored only when the user explicitly enables
-**Store message content**. Android backups exclude the database and settings.
-
 ## Performance model
 
 The notification language path uses the pretrained, INT8-quantized
@@ -110,11 +107,24 @@ not overstate this capability.
 
 ```text
 app/src/main/java/com/attentionos/
-├── data/          Room, settings, repositories
-├── domain/        priority and language engines
-├── presentation/  Compose UI and state
-├── service/       notification listener, review reminder, and retention workers
-└── training/      local personalized classifier and privacy-safe export
+├── core/
+│   ├── common/    shared constants (time, scheduling limits)
+│   └── di/        AppContainer, the manual dependency graph
+├── data/
+│   ├── db/        Room database, DAO, entities, migrations
+│   ├── settings/  DataStore-backed preferences
+│   └── repository/ decision recording, feedback, hashing
+├── domain/        priority engine, shared AttentionPolicy, models
+├── ai/            ONNX analyzer and WordPiece tokenizer
+├── service/       notification listener, reminder and retention workers
+├── training/      local personalized classifier and export
+└── ui/
+    ├── theme/  components/  navigation/
+    └── onboarding/  home/  review/  insights/  settings/
 ```
+
+Notification title and message content are stored only when the user explicitly enables
+**Store message content**. Android backups exclude the database; note that DataStore settings
+are not yet excluded from device-to-device transfer (tracked for the security phase).
 
 The original product brief remains in [`MVP.md`](MVP.md).

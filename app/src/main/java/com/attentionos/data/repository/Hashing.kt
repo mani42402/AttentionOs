@@ -1,4 +1,4 @@
-package com.attentionos.data
+package com.attentionos.data.repository
 
 import java.security.MessageDigest
 

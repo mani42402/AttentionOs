@@ -1,14 +1,18 @@
-package com.attentionos.data
+package com.attentionos.data.repository
 
 import android.util.Log
 import com.attentionos.BuildConfig
-import com.attentionos.data.local.AttentionDao
-import com.attentionos.data.local.NotificationEventEntity
-import com.attentionos.data.local.PersonalizedModelEntity
-import com.attentionos.data.local.TrainingExampleEntity
-import com.attentionos.data.local.UserMemoryEntity
+import com.attentionos.core.common.TimeConstants
+import com.attentionos.data.db.AttentionDao
+import com.attentionos.data.db.NotificationEventEntity
+import com.attentionos.data.db.NotificationListItem
+import com.attentionos.data.db.PersonalizedModelEntity
+import com.attentionos.data.db.TrainingExampleEntity
+import com.attentionos.data.db.UserMemoryEntity
+import com.attentionos.data.settings.AppSettings
 import com.attentionos.domain.AttentionContext
 import com.attentionos.domain.AttentionDecision
+import com.attentionos.domain.AttentionPolicy
 import com.attentionos.domain.AttentionPriority
 import com.attentionos.domain.NotificationCategory
 import com.attentionos.domain.NotificationSignal
@@ -36,14 +40,17 @@ class AttentionRepository(
     private var modelLoaded = false
     private var cachedModel: PersonalizedModelState? = null
 
-    fun recentEvents(): Flow<List<NotificationEventEntity>> = dao.observeRecent()
+    fun recentEvents(): Flow<List<NotificationListItem>> = dao.observeRecent()
     fun importantEvents(): Flow<List<NotificationEventEntity>> = dao.observeImportant()
     fun queuedEvents(): Flow<List<NotificationEventEntity>> = dao.observeQueued()
     fun receivedSince(since: Long): Flow<Int> = dao.observeReceivedSince(since)
     fun importantSince(since: Long): Flow<Int> = dao.observeImportantSince(since)
     fun queuedSince(since: Long): Flow<Int> = dao.observeQueuedSince(since)
     fun trainingCount(): Flow<Int> = dao.observeTrainingCount()
-    fun averageAnalysisMillis(): Flow<Double?> = dao.observeAverageAnalysisMillis()
+    /** Average inference latency over the recent window shown in the UI. */
+    fun averageAnalysisMillis(): Flow<Double?> = dao.observeAverageAnalysisMillis(
+        since = System.currentTimeMillis() - LATENCY_WINDOW_MILLIS,
+    )
     fun personalizedModelProgress(): Flow<PersonalizedModelProgress> =
         dao.observePersonalizedModel().map { model ->
             PersonalizedModelProgress(
@@ -286,7 +293,7 @@ class AttentionRepository(
     }
 
     suspend fun prune(retentionDays: Int) {
-        val before = System.currentTimeMillis() - retentionDays * DAY_MILLIS
+        val before = System.currentTimeMillis() - retentionDays * TimeConstants.DAY_MILLIS
         dao.deleteEventsBefore(before)
         dao.deleteExportedTrainingBefore(before)
     }
@@ -454,17 +461,16 @@ class AttentionRepository(
     private fun isSafetyProtected(
         decision: AttentionDecision,
         signal: NotificationSignal,
-    ): Boolean = decision.category in setOf(
-        NotificationCategory.SECURITY,
-        NotificationCategory.FINANCE,
-    ) ||
-        decision.semanticUrgency >= 0.75f ||
-        signal.categoryHint == "call" ||
-        signal.categoryHint == "alarm"
+    ): Boolean = AttentionPolicy.isSafetyProtected(
+        category = decision.category,
+        semanticUrgency = decision.semanticUrgency,
+        categoryHint = signal.categoryHint,
+    )
 
     private fun pilotPeriodComplete(settings: AppSettings): Boolean =
         settings.pilotStartedAt > 0L &&
-            System.currentTimeMillis() - settings.pilotStartedAt >= PILOT_DURATION_MILLIS
+            System.currentTimeMillis() - settings.pilotStartedAt >=
+            TimeConstants.PILOT_DURATION_MILLIS
 
     private fun String.jsonEscape(): String = buildString(length + 8) {
         this@jsonEscape.forEach { character ->
@@ -480,9 +486,8 @@ class AttentionRepository(
     }
 
     private companion object {
-        const val DAY_MILLIS = 86_400_000L
         const val HIGH_PRIORITY_THRESHOLD = 0.68f
-        const val PILOT_DURATION_MILLIS = 7L * DAY_MILLIS
+        const val LATENCY_WINDOW_MILLIS = 7L * TimeConstants.DAY_MILLIS
 
         val testScenarios = listOf(
             TestScenario(

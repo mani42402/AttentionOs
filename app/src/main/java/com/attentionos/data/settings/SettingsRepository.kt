@@ -1,5 +1,6 @@
-package com.attentionos.data
+package com.attentionos.data.settings
 
+import com.attentionos.core.common.TimeConstants
 import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
@@ -51,7 +52,7 @@ class SettingsRepository(private val context: Context) {
             reviewReminderEnabled = values[REVIEW_REMINDER_ENABLED] ?: false,
             reviewReminderTimes = values[REVIEW_REMINDER_TIMES]
                 ?.mapNotNull(String::toIntOrNull)
-                ?.filter { it in 0 until MINUTES_PER_DAY }
+                ?.filter { it in 0 until TimeConstants.MINUTES_PER_DAY }
                 ?.toSet()
                 ?.takeIf(Set<Int>::isNotEmpty)
                 ?: setOf((values[REVIEW_REMINDER_HOUR] ?: 19) * 60),
@@ -79,10 +80,10 @@ class SettingsRepository(private val context: Context) {
     suspend fun setReviewReminderTimes(times: Set<Int>) {
         val normalized = times
             .asSequence()
-            .filter { it in 0 until MINUTES_PER_DAY }
+            .filter { it in 0 until TimeConstants.MINUTES_PER_DAY }
             .distinct()
             .sorted()
-            .take(MAX_DAILY_REMINDERS)
+            .take(TimeConstants.MAX_DAILY_REMINDERS)
             .map(Int::toString)
             .toSet()
         context.settingsDataStore.edit {
@@ -129,7 +130,5 @@ class SettingsRepository(private val context: Context) {
         val MOTION_ENABLED = booleanPreferencesKey("motion_enabled")
         val ONBOARDING_COMPLETE = booleanPreferencesKey("onboarding_complete")
         val PILOT_STARTED_AT = longPreferencesKey("pilot_started_at")
-        const val MINUTES_PER_DAY = 24 * 60
-        const val MAX_DAILY_REMINDERS = 6
     }
 }

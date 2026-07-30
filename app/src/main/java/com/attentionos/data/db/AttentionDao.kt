@@ -1,4 +1,4 @@
-package com.attentionos.data.local
+package com.attentionos.data.db
 
 import androidx.room.Dao
 import androidx.room.Insert
@@ -13,8 +13,23 @@ interface AttentionDao {
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insertEvent(event: NotificationEventEntity): Long
 
-    @Query("SELECT * FROM notification_events ORDER BY postedAt DESC LIMIT :limit")
-    fun observeRecent(limit: Int = 60): Flow<List<NotificationEventEntity>>
+    /**
+     * Recent events as a list projection.
+     *
+     * Selects only the columns the UI renders; notably it reports whether an embedding exists
+     * rather than loading the blob itself, which the list never displays.
+     */
+    @Query(
+        """
+        SELECT id, notificationKey, appLabel, title, message, postedAt, priority, category,
+               explanation, queued, action, personalProbability, personalModelApplied,
+               (embeddingQ8 IS NOT NULL) AS hasEmbedding
+        FROM notification_events
+        ORDER BY postedAt DESC
+        LIMIT :limit
+        """,
+    )
+    fun observeRecent(limit: Int = 60): Flow<List<NotificationListItem>>
 
     @Query(
         """
@@ -55,13 +70,21 @@ interface AttentionDao {
     @Query("SELECT COUNT(*) FROM training_examples")
     fun observeTrainingCount(): Flow<Int>
 
+    /**
+     * Recent inference latency.
+     *
+     * Bounded by [since] so this is an index-assisted range scan rather than a full-table
+     * average. It is observed by the UI and therefore re-runs on every notification insert,
+     * which made an unbounded scan over the full retention window the most expensive query
+     * in the app.
+     */
     @Query(
         """
         SELECT AVG(analysisDurationMillis) FROM notification_events
-        WHERE analysisDurationMillis > 0
+        WHERE analysisDurationMillis > 0 AND postedAt >= :since
         """,
     )
-    fun observeAverageAnalysisMillis(): Flow<Double?>
+    fun observeAverageAnalysisMillis(since: Long): Flow<Double?>
 
     @Query("SELECT * FROM training_examples WHERE exported = 0 ORDER BY createdAt LIMIT :limit")
     suspend fun trainingForExport(limit: Int = 10_000): List<TrainingExampleEntity>
