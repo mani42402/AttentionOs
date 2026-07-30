@@ -1,68 +1,69 @@
 package com.attentionos.ui.settings
 
-import android.provider.Settings
-import androidx.compose.foundation.background
+import android.app.TimePickerDialog
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBars
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.Notifications
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Share
-import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TimePicker
-import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.unit.dp
-import com.attentionos.R
-import com.attentionos.core.common.TimeConstants
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.tooling.preview.Preview
 import com.attentionos.data.repository.StorageSummary
+import com.attentionos.R
 import com.attentionos.ui.MainUiState
-import com.attentionos.ui.components.ActionSettingRow
-import com.attentionos.ui.components.ScreenHeader
+import com.attentionos.ui.components.ActionRow
+import com.attentionos.ui.components.OnDeviceBadge
+import com.attentionos.ui.components.RowDivider
+import com.attentionos.ui.components.SignalEyebrow
+import com.attentionos.ui.components.FeatureSurfaceMutedColor
+import com.attentionos.ui.components.SignalFeatureSurface
+import com.attentionos.ui.components.SignalScreenHeader
 import com.attentionos.ui.components.SettingsGroup
-import com.attentionos.ui.components.SoftDivider
-import com.attentionos.ui.components.ToggleSettingRow
-import com.attentionos.ui.insights.ControlStatusCard
-import com.attentionos.ui.theme.Coral500
-import com.attentionos.ui.theme.Mint500
-import com.attentionos.ui.theme.Sun500
+import com.attentionos.ui.components.ThemeModeSelector
+import com.attentionos.ui.components.ToggleRow
+import com.attentionos.ui.components.VSpace
+import com.attentionos.ui.components.ValueRow
+import com.attentionos.ui.theme.AttentionTheme
+import com.attentionos.ui.theme.SignalColors
+import com.attentionos.ui.theme.Spacing
+import com.attentionos.ui.theme.ThemeMode
+import java.time.LocalTime
+import java.time.format.DateTimeFormatter
 
+/**
+ * Settings.
+ *
+ * Regrouped around what a user is trying to do — control interruptions, choose how it looks,
+ * understand what is stored — rather than mirroring the order features were built in. Every row
+ * is a single merged touch target with correct semantics; the previous rows put the target on
+ * the switch alone, leaving the label dead to touch and reading as three separate nodes to a
+ * screen reader.
+ */
 @Composable
 internal fun SettingsScreen(
     state: MainUiState,
@@ -79,7 +80,8 @@ internal fun SettingsScreen(
     onMediumVibrationChanged: (Boolean) -> Unit,
     onReminderChanged: (Boolean) -> Unit,
     onReminderTimesChanged: (Set<Int>) -> Unit,
-    onDarkThemeChanged: (Boolean) -> Unit,
+    onThemeModeChanged: (ThemeMode) -> Unit,
+    onDynamicColorChanged: (Boolean) -> Unit,
     onMotionChanged: (Boolean) -> Unit,
     onScreenSecurityChanged: (Boolean) -> Unit,
     onRequestNotificationPermission: () -> Unit,
@@ -91,510 +93,506 @@ internal fun SettingsScreen(
     storage: StorageSummary,
 ) {
     var showDeleteDialog by remember { mutableStateOf(false) }
-    var showResetModelDialog by remember { mutableStateOf(false) }
+    var showResetDialog by remember { mutableStateOf(false) }
+    val settings = state.settings
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(
-            top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + 18.dp,
-            start = 16.dp,
-            end = 16.dp,
-            bottom = 32.dp,
+            start = Spacing.screenHorizontal,
+            end = Spacing.screenHorizontal,
+            bottom = Spacing.bottomBarClearance,
         ),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+        verticalArrangement = Arrangement.spacedBy(Spacing.lg),
     ) {
         item {
-            ScreenHeader(
-                eyebrow = stringResource(R.string.settings_control_center),
+            SignalScreenHeader(
                 title = stringResource(R.string.settings_settings),
-                description = stringResource(R.string.settings_every_behavior_clearly_under_your_control),
-                horizontalPadding = 4.dp,
+                subtitle = stringResource(R.string.settings_every_behavior_remains_visible_and_under_your),
+                modifier = Modifier
+                    .statusBarsPadding()
+                    .padding(top = Spacing.lg),
+                trailing = { OnDeviceBadge() },
             )
         }
+
+        item { SettingsStatusPanel(state, hasAccess) }
+
         item {
-            ControlStatusCard(
-                state = state,
-                hasAccess = hasAccess,
-            )
-        }
-        item {
-            SettingsGroup(title = stringResource(R.string.settings_core_behavior)) {
-                ToggleSettingRow(
-                    icon = Icons.Default.Lock,
-                    title = stringResource(R.string.insights_attention_mode),
-                    subtitle = if (state.settings.focusMode) {
-                        "Your helper manages sound and vibration; nothing is hidden"
+            SettingsGroup(stringResource(R.string.settings_protection)) {
+                ToggleRow(
+                    title = stringResource(R.string.settings_attention_mode),
+                    subtitle = if (settings.focusMode) {
+                        stringResource(R.string.settings_your_helper_manages_sound_and_vibration)
                     } else {
-                        "Off — source apps control their normal effects"
+                        stringResource(R.string.settings_apps_control_their_own_notification_effects)
                     },
-                    checked = state.settings.focusMode,
+                    checked = settings.focusMode,
                     onCheckedChange = onFocusChanged,
                 )
-            }
-        }
-        item {
-            SettingsGroup(title = stringResource(R.string.settings_access)) {
-                ActionSettingRow(
-                    icon = Icons.Default.Notifications,
-                    title = stringResource(R.string.insights_notification_access),
-                    subtitle = if (hasAccess) "Active" else "Required for classification",
-                    valueColor = if (hasAccess) Mint500 else Sun500,
+                RowDivider()
+                ActionRow(
+                    title = stringResource(R.string.settings_notification_access),
+                    subtitle = if (hasAccess) stringResource(R.string.settings_connected) else stringResource(R.string.settings_not_connected_tap_to_allow),
                     onClick = onOpenNotificationAccess,
                 )
-                SoftDivider()
-                ActionSettingRow(
-                    icon = Icons.Default.Info,
-                    title = stringResource(R.string.settings_replay_guided_setup),
-                    subtitle = stringResource(R.string.settings_review_guarantees_controls_and_the_safety_test),
-                    onClick = onReplayOnboarding,
+            }
+        }
+
+        item {
+            SettingsGroup(stringResource(R.string.settings_what_may_interrupt_you)) {
+                ToggleRow(
+                    title = stringResource(R.string.settings_urgent_alerts),
+                    subtitle = stringResource(R.string.settings_sound_for_security_calls_and_alarms),
+                    checked = settings.criticalSound,
+                    onCheckedChange = onCriticalSoundChanged,
+                )
+                RowDivider()
+                ToggleRow(
+                    title = stringResource(R.string.settings_urgent_vibration),
+                    subtitle = stringResource(R.string.settings_vibrate_for_urgent_alerts),
+                    checked = settings.criticalVibration,
+                    onCheckedChange = onCriticalVibrationChanged,
+                )
+                RowDivider()
+                ToggleRow(
+                    title = stringResource(R.string.settings_important_alerts),
+                    subtitle = stringResource(R.string.settings_sound_for_things_that_likely_need_you),
+                    checked = settings.highSound,
+                    onCheckedChange = onHighSoundChanged,
+                )
+                RowDivider()
+                ToggleRow(
+                    title = stringResource(R.string.settings_important_vibration),
+                    subtitle = stringResource(R.string.settings_vibrate_for_important_alerts),
+                    checked = settings.highVibration,
+                    onCheckedChange = onHighVibrationChanged,
+                )
+                RowDivider()
+                ToggleRow(
+                    title = stringResource(R.string.settings_everyday_alerts),
+                    subtitle = stringResource(R.string.settings_sound_for_normal_priority_notifications),
+                    checked = settings.mediumSound,
+                    onCheckedChange = onMediumSoundChanged,
+                )
+                RowDivider()
+                ToggleRow(
+                    title = stringResource(R.string.settings_everyday_vibration),
+                    subtitle = stringResource(R.string.settings_vibrate_for_normal_priority_notifications),
+                    checked = settings.mediumVibration,
+                    onCheckedChange = onMediumVibrationChanged,
                 )
             }
         }
+
         item {
-            SettingsGroup(title = stringResource(R.string.settings_interruption_behavior)) {
-                InterruptionPriorityRow(
-                    priority = "Critical",
-                    description = stringResource(R.string.settings_security_safety_and_immediate_action),
-                    sound = state.settings.criticalSound,
-                    vibration = state.settings.criticalVibration,
-                    onSoundChanged = onCriticalSoundChanged,
-                    onVibrationChanged = onCriticalVibrationChanged,
+            SettingsGroup(stringResource(R.string.settings_appearance)) {
+                ThemeModeSelector(
+                    selected = ThemeMode.fromStorage(settings.themeMode),
+                    onSelected = onThemeModeChanged,
                 )
-                HorizontalDivider()
-                InterruptionPriorityRow(
-                    priority = "High",
-                    description = stringResource(R.string.settings_important_and_time_sensitive),
-                    sound = state.settings.highSound,
-                    vibration = state.settings.highVibration,
-                    onSoundChanged = onHighSoundChanged,
-                    onVibrationChanged = onHighVibrationChanged,
+                RowDivider()
+                ToggleRow(
+                    title = stringResource(R.string.settings_use_wallpaper_colours),
+                    subtitle = stringResource(R.string.settings_match_the_system_palette_instead_of_the),
+                    checked = settings.dynamicColor,
+                    onCheckedChange = onDynamicColorChanged,
                 )
-                HorizontalDivider()
-                InterruptionPriorityRow(
-                    priority = "Medium",
-                    description = stringResource(R.string.settings_useful_but_usually_able_to_wait),
-                    sound = state.settings.mediumSound,
-                    vibration = state.settings.mediumVibration,
-                    onSoundChanged = onMediumSoundChanged,
-                    onVibrationChanged = onMediumVibrationChanged,
-                )
-                Text(
-                    "Low and silent priorities never make AttentionOS sound or vibrate. The original notifications always remain visible.",
-                    modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 16.dp),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        }
-        item {
-            SettingsGroup(title = stringResource(R.string.settings_privacy_learning)) {
-                ToggleSettingRow(
-                    icon = Icons.Default.Star,
-                    title = stringResource(R.string.settings_local_learning),
-                    subtitle = stringResource(R.string.settings_remember_what_you_mark_important_or_can),
-                    checked = state.settings.learningEnabled,
-                    onCheckedChange = onLearningChanged,
-                )
-                HorizontalDivider()
-                ToggleSettingRow(
-                    icon = Icons.Default.Lock,
-                    title = stringResource(R.string.settings_store_message_content),
-                    subtitle = if (state.settings.storeContent) {
-                        "Raw title and text stay in the local database"
-                    } else {
-                        "Off — only private features and hashes are kept"
-                    },
-                    checked = state.settings.storeContent,
-                    onCheckedChange = onStoreContentChanged,
-                )
-                HorizontalDivider()
-                ActionSettingRow(
-                    icon = Icons.Default.Delete,
-                    title = stringResource(R.string.settings_reset_personalization),
-                    subtitle = if (state.personalizedModel.exampleCount == 0) {
-                        "No preferences learned yet"
-                    } else {
-                        "Clear ${state.personalizedModel.exampleCount} learned corrections"
-                    },
-                    valueColor = Coral500,
-                    onClick = { showResetModelDialog = true },
-                )
-            }
-        }
-        item {
-            SettingsGroup(title = stringResource(R.string.settings_appearance_effects)) {
-                ToggleSettingRow(
-                    icon = Icons.Default.Star,
-                    title = stringResource(R.string.settings_dark_appearance),
-                    subtitle = if (state.settings.darkTheme) {
-                        "Midnight theme is active"
-                    } else {
-                        "Light theme is active"
-                    },
-                    checked = state.settings.darkTheme,
-                    onCheckedChange = onDarkThemeChanged,
-                )
-                SoftDivider()
-                ToggleSettingRow(
-                    icon = Icons.Default.CheckCircle,
+                RowDivider()
+                ToggleRow(
                     title = stringResource(R.string.settings_motion_effects),
-                    subtitle = if (state.settings.motionEnabled) {
-                        "Smooth transitions, graphs, and status effects"
+                    subtitle = if (settings.motionEnabled) {
+                        stringResource(R.string.settings_animated_transitions_and_charts)
                     } else {
-                        "Reduced motion across the interface"
+                        stringResource(R.string.settings_reduced_motion_throughout)
                     },
-                    checked = state.settings.motionEnabled,
+                    checked = settings.motionEnabled,
                     onCheckedChange = onMotionChanged,
                 )
-                SoftDivider()
-                ToggleSettingRow(
-                    icon = Icons.Default.Lock,
-                    title = stringResource(R.string.settings_hide_from_screenshots),
-                    subtitle = if (state.settings.screenSecurity) {
-                        stringResource(R.string.settings_screen_security_on)
+            }
+        }
+
+        item {
+            SettingsGroup(stringResource(R.string.settings_learning)) {
+                ToggleRow(
+                    title = stringResource(R.string.settings_learn_from_my_choices),
+                    subtitle = stringResource(R.string.settings_adapt_to_which_notifications_you_act_on),
+                    checked = settings.learningEnabled,
+                    onCheckedChange = onLearningChanged,
+                )
+                RowDivider()
+                ToggleRow(
+                    title = stringResource(R.string.settings_daily_review_reminder),
+                    subtitle = if (settings.reviewReminderEnabled) {
+                        stringResource(R.string.settings_a_quiet_nudge_to_teach_your_helper)
                     } else {
-                        stringResource(R.string.settings_screen_security_off)
+                        stringResource(R.string.settings_review_whenever_you_choose)
                     },
-                    checked = state.settings.screenSecurity,
+                    checked = settings.reviewReminderEnabled,
+                    onCheckedChange = {
+                        if (it) onRequestNotificationPermission()
+                        onReminderChanged(it)
+                    },
+                )
+                if (settings.reviewReminderEnabled) {
+                    RowDivider()
+                    ReminderTimes(
+                        selected = settings.reviewReminderTimes,
+                        onChanged = onReminderTimesChanged,
+                        onRequestPermission = onRequestNotificationPermission,
+                    )
+                }
+                RowDivider()
+                ActionRow(
+                    title = stringResource(R.string.settings_reset_personalization),
+                    subtitle = stringResource(R.string.settings_forget_learned_preferences_and_start_over),
+                    onClick = { showResetDialog = true },
+                )
+            }
+        }
+
+        item {
+            SettingsGroup(stringResource(R.string.settings_privacy)) {
+                ToggleRow(
+                    title = stringResource(R.string.settings_store_message_content),
+                    subtitle = if (settings.storeContent) {
+                        stringResource(R.string.settings_notification_text_is_saved_on_this_device)
+                    } else {
+                        stringResource(R.string.settings_off_only_categories_and_private_hashes_are)
+                    },
+                    checked = settings.storeContent,
+                    onCheckedChange = onStoreContentChanged,
+                )
+                RowDivider()
+                ToggleRow(
+                    title = stringResource(R.string.settings_hide_from_screenshots),
+                    subtitle = if (settings.screenSecurity) {
+                        stringResource(R.string.settings_content_is_hidden_from_screenshots_and_the)
+                    } else {
+                        stringResource(R.string.settings_screenshots_and_screen_recording_can_capture_content)
+                    },
+                    checked = settings.screenSecurity,
                     onCheckedChange = onScreenSecurityChanged,
                 )
+                RowDivider()
+                RetentionChips(settings.retentionDays, onRetentionChanged)
             }
         }
+
         item {
-            SettingsGroup(title = stringResource(R.string.settings_review_reminders)) {
-                ToggleSettingRow(
-                    icon = Icons.Default.Notifications,
-                    title = stringResource(R.string.settings_daily_review_reminders),
-                    subtitle = if (state.settings.reviewReminderEnabled) {
-                        val count = state.settings.reviewReminderTimes.size
-                        "$count quiet ${if (count == 1) "reminder" else "reminders"} each day"
-                    } else {
-                        "Off — review whenever you choose"
-                    },
-                    checked = state.settings.reviewReminderEnabled,
-                    onCheckedChange = {
-                        onReminderChanged(it)
-                        if (it) onRequestNotificationPermission()
-                    },
+            SettingsGroup(stringResource(R.string.settings_what_s_stored_on_this_device)) {
+                ValueRow(stringResource(R.string.settings_notifications_recorded), storage.notificationCount.toString())
+                ValueRow(stringResource(R.string.settings_senders_remembered), storage.senderCount.toString())
+                ValueRow(stringResource(R.string.settings_learning_examples), storage.trainingExampleCount.toString())
+                ValueRow(
+                    stringResource(R.string.settings_with_message_text),
+                    if (storage.storedContentCount == 0) stringResource(R.string.settings_none) else storage.storedContentCount.toString(),
                 )
-                if (state.settings.reviewReminderEnabled) {
-                    SoftDivider()
-                    ReminderScheduleEditor(
-                        times = state.settings.reviewReminderTimes,
-                        onTimesChanged = onReminderTimesChanged,
-                    )
-                }
-            }
-        }
-        item {
-            SettingsGroup(title = stringResource(R.string.settings_data_retention)) {
-                Column(Modifier.padding(16.dp)) {
-                    Text(
-                        "Automatically delete decision history",
-                        style = MaterialTheme.typography.titleMedium,
-                    )
-                    Spacer(Modifier.height(10.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        listOf(7, 30, 90).forEach { days ->
-                            FilterChip(
-                                selected = state.settings.retentionDays == days,
-                                onClick = { onRetentionChanged(days) },
-                                label = { Text("$days days") },
-                            )
-                        }
-                    }
-                }
-            }
-        }
-        item {
-            SettingsGroup(title = stringResource(R.string.settings_whats_stored)) {
-                StorageRow(
-                    label = stringResource(R.string.settings_notifications_recorded),
-                    value = storage.notificationCount.toString(),
-                )
-                StorageRow(
-                    label = stringResource(R.string.settings_senders_remembered),
-                    value = storage.senderCount.toString(),
-                )
-                StorageRow(
-                    label = stringResource(R.string.settings_learning_examples),
-                    value = storage.trainingExampleCount.toString(),
-                )
-                StorageRow(
-                    label = stringResource(R.string.settings_with_message_text),
-                    value = if (storage.storedContentCount == 0) {
-                        stringResource(R.string.settings_none_stored)
-                    } else {
-                        storage.storedContentCount.toString()
-                    },
-                )
-                StorageRow(
-                    label = stringResource(R.string.settings_on_disk),
-                    value = formatBytes(storage.databaseBytes),
-                )
-                SoftDivider()
+                ValueRow(stringResource(R.string.settings_encrypted_database), formatBytes(storage.databaseBytes))
+                RowDivider()
                 Text(
-                    stringResource(R.string.settings_storage_footnote),
-                    style = MaterialTheme.typography.bodyMedium,
+                    stringResource(R.string.settings_all_of_this_stays_on_your_device),
+                    style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp),
+                    modifier = Modifier.padding(vertical = Spacing.md),
                 )
             }
         }
+
         item {
-            SettingsGroup(title = stringResource(R.string.settings_your_data)) {
-                ActionSettingRow(
-                    icon = Icons.Default.Share,
+            SettingsGroup(stringResource(R.string.settings_your_data)) {
+                ActionRow(
                     title = stringResource(R.string.settings_export_learning_data),
-                    subtitle = stringResource(R.string.settings_json_lines_with_hashed_sender_identities),
+                    subtitle = stringResource(R.string.settings_a_file_of_private_hashed_training_examples),
                     onClick = onExport,
                 )
-                HorizontalDivider()
-                ActionSettingRow(
-                    icon = Icons.Default.Delete,
+                RowDivider()
+                ActionRow(
+                    title = stringResource(R.string.settings_replay_guided_setup),
+                    subtitle = stringResource(R.string.settings_revisit_the_introduction_without_losing_anything),
+                    onClick = onReplayOnboarding,
+                )
+                RowDivider()
+                ActionRow(
                     title = stringResource(R.string.settings_delete_all_local_data),
-                    subtitle = stringResource(R.string.settings_decisions_memory_and_training_examples),
-                    valueColor = Coral500,
+                    subtitle = stringResource(R.string.settings_history_learned_preferences_and_encryption_keys),
+                    titleColor = MaterialTheme.colorScheme.error,
                     onClick = { showDeleteDialog = true },
                 )
             }
         }
+
         item {
-            Text(
-                "AttentionOS 0.1 · On-device by design",
+            Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = 8.dp),
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+                    .padding(vertical = Spacing.lg),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                SignalEyebrow(stringResource(R.string.settings_attentionos_on_device_by_design))
+                VSpace(Spacing.xs)
+                Text(
+                    stringResource(R.string.settings_your_controls_and_data_stay_with_you),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         }
     }
 
     if (showDeleteDialog) {
-        AlertDialog(
-            onDismissRequest = { showDeleteDialog = false },
-            title = { Text(stringResource(R.string.settings_delete_all_local_data_2)) },
-            text = {
-                Text(
-                    "This permanently removes your decision history, learned sender memory, and training examples. Settings stay unchanged.",
-                )
+        ConfirmDialog(
+            title = stringResource(R.string.settings_delete_everything),
+            body = stringResource(R.string.settings_this_removes_all_decisions_learned_preferences_and),
+            confirmLabel = stringResource(R.string.settings_delete),
+            destructive = true,
+            onConfirm = {
+                showDeleteDialog = false
+                onDelete()
             },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        showDeleteDialog = false
-                        onDelete()
-                    },
-                ) {
-                    Text(stringResource(R.string.settings_delete), color = MaterialTheme.colorScheme.error)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showDeleteDialog = false }) { Text(stringResource(R.string.settings_cancel)) }
-            },
+            onDismiss = { showDeleteDialog = false },
         )
     }
 
-    if (showResetModelDialog) {
-        AlertDialog(
-            onDismissRequest = { showResetModelDialog = false },
-            title = { Text(stringResource(R.string.settings_reset_personalization_2)) },
-            text = {
-                Text(
-                    "This clears only your personalized preferences and progress. " +
-                        "Notification history and exported training examples remain.",
-                )
+    if (showResetDialog) {
+        ConfirmDialog(
+            title = stringResource(R.string.settings_reset_personalization_2),
+            body = stringResource(R.string.settings_your_helper_forgets_what_it_learned_about),
+            confirmLabel = stringResource(R.string.settings_reset),
+            destructive = false,
+            onConfirm = {
+                showResetDialog = false
+                onResetPersonalizedModel()
             },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        showResetModelDialog = false
-                        onResetPersonalizedModel()
-                    },
-                ) {
-                    Text(stringResource(R.string.settings_reset), color = MaterialTheme.colorScheme.error)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showResetModelDialog = false }) { Text(stringResource(R.string.settings_cancel)) }
-            },
+            onDismiss = { showResetDialog = false },
         )
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-internal fun ReminderScheduleEditor(
-    times: Set<Int>,
-    onTimesChanged: (Set<Int>) -> Unit,
+private fun SettingsStatusPanel(state: MainUiState, hasAccess: Boolean) {
+    SignalFeatureSurface {
+        Column {
+            SignalEyebrow(stringResource(R.string.settings_control_center), color = SignalColors.Mint)
+            VSpace(Spacing.sm)
+            Text(
+                text = when {
+                    !hasAccess -> stringResource(R.string.settings_needs_notification_access)
+                    state.settings.focusMode -> stringResource(R.string.settings_attention_mode_is_on)
+                    else -> stringResource(R.string.settings_attention_mode_is_standing_by)
+                },
+                style = MaterialTheme.typography.headlineSmall,
+            )
+            VSpace(Spacing.xs)
+            Text(
+                stringResource(R.string.settings_all_analysis_and_preference_learning_run_locally),
+                style = MaterialTheme.typography.bodyMedium,
+                color = FeatureSurfaceMutedColor,
+            )
+            VSpace(Spacing.lg)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(Spacing.md),
+            ) {
+                StatusValue(
+                    label = stringResource(R.string.settings_access),
+                    value = if (hasAccess) stringResource(R.string.settings_connected) else stringResource(R.string.settings_off),
+                    accent = if (hasAccess) SignalColors.Mint else SignalColors.Tangerine,
+                    modifier = Modifier.weight(1f),
+                )
+                StatusValue(
+                    label = stringResource(R.string.settings_learning_2),
+                    value = if (state.settings.learningEnabled) stringResource(R.string.settings_enabled) else stringResource(R.string.settings_paused),
+                    accent = SignalColors.Sun,
+                    modifier = Modifier.weight(1f),
+                )
+                StatusValue(
+                    label = stringResource(R.string.settings_motion),
+                    value = if (state.settings.motionEnabled) stringResource(R.string.settings_full) else stringResource(R.string.settings_reduced),
+                    accent = SignalColors.Cream,
+                    modifier = Modifier.weight(1f),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun StatusValue(
+    label: String,
+    value: String,
+    accent: Color,
+    modifier: Modifier = Modifier,
 ) {
-    var showPicker by remember { mutableStateOf(false) }
-    val pickerState = rememberTimePickerState(
-        initialHour = 19,
-        initialMinute = 0,
-        is24Hour = false,
+    Column(modifier.semantics(mergeDescendants = true) {}) {
+        Text(label, style = MaterialTheme.typography.labelSmall, color = FeatureSurfaceMutedColor)
+        VSpace(Spacing.xs)
+        Text(value, style = MaterialTheme.typography.titleSmall, color = accent)
+    }
+}
+
+@Composable
+private fun ReminderTimes(
+    selected: Set<Int>,
+    onChanged: (Set<Int>) -> Unit,
+    onRequestPermission: () -> Unit,
+) {
+    val context = LocalContext.current
+    val sorted = selected.sorted()
+    Column(Modifier.padding(vertical = Spacing.md)) {
+        Text(stringResource(R.string.settings_review_times), style = MaterialTheme.typography.bodyLarge)
+        VSpace(Spacing.xs)
+        Text(
+            stringResource(R.string.settings_up_to_six_quiet_reminders_each_day),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        VSpace(Spacing.sm)
+        Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
+            sorted.take(3).forEach { minute ->
+                ReminderChip(
+                    minute = minute,
+                    canRemove = selected.size > 1,
+                    onRemove = { onChanged(selected - minute) },
+                )
+            }
+        }
+        if (sorted.size > 3) {
+            VSpace(Spacing.sm)
+            Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
+                sorted.drop(3).take(3).forEach { minute ->
+                    ReminderChip(
+                        minute = minute,
+                        canRemove = selected.size > 1,
+                        onRemove = { onChanged(selected - minute) },
+                    )
+                }
+            }
+        }
+        VSpace(Spacing.sm)
+        TextButton(
+            onClick = {
+                val fallback = sorted.lastOrNull() ?: 19 * 60
+                TimePickerDialog(
+                    context,
+                    { _, hour, minute ->
+                        onRequestPermission()
+                        onChanged(selected + (hour * 60 + minute))
+                    },
+                    fallback / 60,
+                    fallback % 60,
+                    false,
+                ).show()
+            },
+            enabled = selected.size < MAX_REMINDER_TIMES,
+        ) {
+            Text(if (selected.size < MAX_REMINDER_TIMES) stringResource(R.string.settings_add_another_time) else stringResource(R.string.settings_six_time_limit_reached))
+        }
+    }
+}
+
+/**
+ * A scheduled reminder time, which the chip removes when tapped.
+ *
+ * A permanently-selected chip that deletes on tap is not self-explanatory, so the action is
+ * spelled out for screen readers rather than left to the visual metaphor.
+ */
+@Composable
+private fun ReminderChip(minute: Int, canRemove: Boolean, onRemove: () -> Unit) {
+    val time = formatMinuteOfDay(minute)
+    val spoken = stringResource(R.string.settings_remove_reminder_at, time)
+    FilterChip(
+        selected = true,
+        enabled = canRemove,
+        onClick = onRemove,
+        label = { Text(time) },
+        modifier = Modifier.semantics { contentDescription = spoken },
     )
-    Column(Modifier.padding(16.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                Text(stringResource(R.string.settings_reminder_schedule), style = MaterialTheme.typography.titleMedium)
-                Text(
-                    "Choose any time · up to 6 quiet reminders daily",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            Surface(
-                color = MaterialTheme.colorScheme.primaryContainer,
-                shape = CircleShape,
-            ) {
-                Text(
-                    "${times.size}/6",
-                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.primary,
-                )
-            }
-        }
-        Spacer(Modifier.height(14.dp))
-        times.sorted().forEach { minuteOfDay ->
-            Surface(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 4.dp),
-                color = MaterialTheme.colorScheme.surfaceVariant,
-                shape = RoundedCornerShape(16.dp),
-            ) {
-                Row(
-                    modifier = Modifier.padding(start = 14.dp, end = 6.dp, top = 6.dp, bottom = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Box(
-                        Modifier
-                            .size(8.dp)
-                            .background(Mint500, CircleShape),
-                    )
-                    Spacer(Modifier.width(10.dp))
-                    Text(
-                        formatReminderTime(minuteOfDay),
-                        modifier = Modifier.weight(1f),
-                        style = MaterialTheme.typography.titleMedium,
-                    )
-                    TextButton(
-                        onClick = { onTimesChanged(times - minuteOfDay) },
-                        enabled = times.size > 1,
-                    ) {
-                        Text(stringResource(R.string.settings_remove))
-                    }
-                }
-            }
-        }
-        Spacer(Modifier.height(8.dp))
-        OutlinedButton(
-            onClick = { showPicker = true },
-            enabled = times.size < TimeConstants.MAX_DAILY_REMINDERS,
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(16.dp),
-        ) {
-            Text(if (times.size < TimeConstants.MAX_DAILY_REMINDERS) "Add another time" else "Six reminders maximum")
-        }
-    }
-
-    if (showPicker) {
-        AlertDialog(
-            onDismissRequest = { showPicker = false },
-            title = { Text(stringResource(R.string.settings_add_reminder_time)) },
-            text = { TimePicker(state = pickerState) },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        val minuteOfDay = pickerState.hour * 60 + pickerState.minute
-                        onTimesChanged(times + minuteOfDay)
-                        showPicker = false
-                    },
-                ) {
-                    Text(stringResource(R.string.settings_add))
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showPicker = false }) { Text(stringResource(R.string.settings_cancel)) }
-            },
-        )
-    }
-}
-
-internal fun formatReminderTime(minuteOfDay: Int): String {
-    val normalized = minuteOfDay.coerceIn(0, 24 * 60 - 1)
-    val hour = normalized / 60
-    val minute = normalized % 60
-    val display = when (val twelveHour = hour % 12) {
-        0 -> 12
-        else -> twelveHour
-    }
-    return "$display:${minute.toString().padStart(2, '0')} ${if (hour < 12) "AM" else "PM"}"
 }
 
 @Composable
-internal fun InterruptionPriorityRow(
-    priority: String,
-    description: String,
-    sound: Boolean,
-    vibration: Boolean,
-    onSoundChanged: (Boolean) -> Unit,
-    onVibrationChanged: (Boolean) -> Unit,
+private fun RetentionChips(selected: Int, onSelect: (Int) -> Unit) {
+    Column(Modifier.padding(vertical = Spacing.md)) {
+        Text(stringResource(R.string.settings_keep_history_for), style = MaterialTheme.typography.bodyLarge)
+        VSpace(Spacing.sm)
+        Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
+            listOf(7, 30, 90).forEach { days ->
+                FilterChip(
+                    selected = selected == days,
+                    onClick = { onSelect(days) },
+                    label = { Text(pluralStringResource(R.plurals.settings_retention_days, days, days)) },
+                    modifier = Modifier.semantics { role = Role.RadioButton },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ConfirmDialog(
+    title: String,
+    body: String,
+    confirmLabel: String,
+    destructive: Boolean,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit,
 ) {
-    Column(Modifier.padding(horizontal = 16.dp, vertical = 13.dp)) {
-        Text(priority, style = MaterialTheme.typography.titleMedium)
-        Text(
-            description,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Spacer(Modifier.height(8.dp))
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            FilterChip(
-                selected = sound,
-                onClick = { onSoundChanged(!sound) },
-                label = { Text(if (sound) "Sound on" else "Sound off") },
-                modifier = Modifier.weight(1f),
-            )
-            FilterChip(
-                selected = vibration,
-                onClick = { onVibrationChanged(!vibration) },
-                label = { Text(if (vibration) "Vibrate on" else "Vibrate off") },
-                modifier = Modifier.weight(1f),
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title) },
+        text = { Text(body) },
+        confirmButton = {
+            TextButton(onClick = onConfirm) {
+                Text(
+                    confirmLabel,
+                    color = if (destructive) {
+                        MaterialTheme.colorScheme.error
+                    } else {
+                        MaterialTheme.colorScheme.primary
+                    },
+                )
+            }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.settings_cancel)) } },
+    )
+}
+
+/** Human-readable byte count; this dashboard is meant to be read, not parsed. */
+@Composable
+@ReadOnlyComposable
+internal fun formatBytes(bytes: Long): String = when {
+    bytes <= 0 -> stringResource(R.string.settings_0_kb)
+    bytes < 1024 -> stringResource(R.string.settings_b, bytes)
+    bytes < 1024 * 1024 -> stringResource(R.string.settings_kb, bytes / 1024)
+    else -> stringResource(R.string.settings_mb, bytes / (1024.0 * 1024.0))
+}
+
+private fun formatMinuteOfDay(value: Int): String {
+    val normalized = value.coerceIn(0, 23 * 60 + 59)
+    val time = LocalTime.of(normalized / 60, normalized % 60)
+    return time.format(DateTimeFormatter.ofPattern("h:mm a"))
+}
+
+private const val MAX_REMINDER_TIMES = 6
+
+@Preview(name = "Settings · light", heightDp = 1400)
+@Composable
+private fun SettingsPreview() {
+    AttentionTheme(themeMode = ThemeMode.Light) {
+        Surface(color = MaterialTheme.colorScheme.background) {
+            SettingsScreen(
+                state = MainUiState(isLoading = false),
+                hasAccess = true,
+                onFocusChanged = {}, onOpenNotificationAccess = {}, onStoreContentChanged = {},
+                onLearningChanged = {}, onCriticalSoundChanged = {}, onCriticalVibrationChanged = {},
+                onHighSoundChanged = {}, onHighVibrationChanged = {}, onMediumSoundChanged = {},
+                onMediumVibrationChanged = {}, onReminderChanged = {}, onReminderTimesChanged = {},
+                onThemeModeChanged = {}, onDynamicColorChanged = {}, onMotionChanged = {},
+                onScreenSecurityChanged = {}, onRequestNotificationPermission = {},
+                onRetentionChanged = {}, onReplayOnboarding = {}, onExport = {},
+                onResetPersonalizedModel = {}, onDelete = {},
+                storage = StorageSummary(notificationCount = 128, senderCount = 14),
             )
         }
     }
-}
-
-/** One line of the storage dashboard: a plain-language label and its current value. */
-@Composable
-internal fun StorageRow(label: String, value: String) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 4.dp, vertical = 9.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(
-            label,
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Text(value, style = MaterialTheme.typography.titleMedium)
-    }
-}
-
-/** Human-readable byte count; the dashboard is meant to be read, not parsed. */
-internal fun formatBytes(bytes: Long): String = when {
-    bytes <= 0 -> "0 KB"
-    bytes < 1024 -> "$bytes B"
-    bytes < 1024 * 1024 -> "${bytes / 1024} KB"
-    else -> "%.1f MB".format(bytes / (1024.0 * 1024.0))
 }

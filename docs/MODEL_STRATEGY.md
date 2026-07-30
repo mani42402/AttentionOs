@@ -2,51 +2,85 @@
 
 ## Current encoder
 
-`sentence-transformers/all-MiniLM-L6-v2`, INT8-quantised for ARM64.
+`potion-base-8M` — a static token-embedding table distilled from `bge-base-en-v1.5`, quantised
+to INT8.
 
 | | |
 |---|---|
-| Asset | 22.0 MB (`models/minilm-l6-qint8-arm64.onnx`) |
-| Embedding | 384 dimensions |
-| Vocabulary | bert-base-uncased, 30,522 tokens |
-| Runtime | ONNX Runtime, CPU, one intra-op thread |
-| Licence | Apache-2.0 |
+| Asset | 7.3 MB (`models/potion-base-8m-q8.bin`) + 0.2 MB vocabulary |
+| Embedding | 256 dimensions |
+| Vocabulary | pruned bert-base-uncased WordPiece, 29,528 tokens |
+| Runtime | none — a memory-mapped lookup table |
+| Licence | MIT |
 
-Replaced `paraphrase-MiniLM-L3-v2` (17.5 MB, 3 layers). The swap cost +4.5 MB for twice the
-encoder depth. The vocabulary file is **byte-identical** between the two models (verified by
-SHA-256), so the tokenizer and its golden vectors were unaffected.
+There is no transformer. Every token has one pretrained vector and a sentence is the mean of its
+tokens, normalised. A notification therefore costs a few thousand additions instead of six
+attention layers.
 
-Changing the encoder changes the feature space the personal classifier was trained in, so
-`PersonalizedAttentionModel.MODEL_VERSION` was bumped to 2. Weights learned against L3 are
-discarded rather than reinterpreted — reusing them would produce confident nonsense instead of
-an error.
+The honest description of the trade: a bag of token vectors **cannot represent word order**, so
+"the payment failed" and "failed the payment" embed identically. That is a real limitation, and
+the only reason it is acceptable is that it was measured on notification text rather than
+assumed away.
 
-## Baseline scorecard
+### What it replaced
 
-Measured by `EncoderEvaluationTest` on an Android 16 emulator against a 20-notification
-labelled set. Re-run it after any encoder change to get a comparable number.
+`all-MiniLM-L6-v2` INT8 plus ONNX Runtime. Removing both is the largest size change the project
+will ever make:
+
+| | before | after |
+|---|---|---|
+| Download (AAB, excluding metadata) | 29.9 MB | **9.8 MB** |
+| Install footprint | 53.3 MB | **11.9 MB** |
+| `libonnxruntime.so` | 26.7 MB | gone |
+| encoder asset | 22.0 MB | 7.3 MB |
+
+ONNX Runtime measured **26.7 MB**, not the 6–15 MB the original plan assumed. That single
+correction is what made the bake-off decisive rather than marginal.
+
+## Bake-off: `all-MiniLM-L6-v2` vs `potion-base-8M`
+
+Run by `EncoderEvaluationTest` on an Android 16 emulator: identical samples, identical scoring,
+identical prototype sentences, one encoder swapped.
+
+A first run over 20 samples put MiniLM ahead on category accuracy by 5 points. That is one
+sample. The labelled set was widened to 50 before anything was decided, and the ordering
+reversed — which is the whole reason the first number could not be trusted.
 
 ```
-model              all-MiniLM-L6-v2-qint8-arm64
-category accuracy  75.0%
-guaranteed alerts  100.0%  (6/6)   [asserted]
-wanted promptly     75.0%  (6/8)   [measured]
-correctly quiet     83.3%  (10/12)
-latency median      4.8 ms
-latency p90        20.5 ms
+                    all-MiniLM-L6-v2   potion-base-8M
+samples                           50               50
+category accuracy              68.0%            72.0%
+guaranteed alerts    100.0% (12/12)   100.0% (12/12)   [asserted]
+wanted promptly       70.6% (12/17)     70.6% (12/17)  [measured]
+correctly quiet       84.8% (28/33)     81.8% (27/33)
+latency median                4.6 ms           1.9 ms
+latency p90                   7.3 ms           3.3 ms
 ```
 
-The harness asserts only what the engine actually guarantees — the never-suppress categories
-plus calls and alarms — and measures everything else. Asserting on unguaranteed behaviour would
-make the test encode a promise the design never made.
+**Decision: adopt `potion-base-8M`.** Not because it scores better — a 2-sample difference on a
+50-sample set is noise in both directions — but because it is *not measurably worse* on any
+metric that matters, ties exactly on both safety and ranking measures, is 2.4× faster, and costs
+20 MB less to download and 41 MB less on disk.
 
-**The two measured misses are the interesting result.** "Production down: the checkout service
-is returning 500s" and "Manager: can you jump on a call right now?" both rank MEDIUM. Neither
-matches a hard floor, and the keyword rules miss them on a technicality: the production-incident
-rule wants "production" near " is down", and the strong-action rule wants "action required"
-alongside "right now". This is exactly the gap personalization is meant to close, so it is
-tracked as a quality metric rather than patched with more keywords — widening the keyword list
-until a test passes would be fitting the rules to the test set.
+What the numbers do **not** support is a claim that the static encoder understands notifications
+better. The defensible statement is that on this task, at this text length, the transformer's
+extra capacity was not buying anything measurable.
+
+Both encoders miss the same five "wanted promptly" cases, and both hold every hard safety floor
+at 100%. The shared misses are a personalization gap, not an encoder gap — see below.
+
+### Consequences
+
+- ONNX Runtime, the MiniLM assets, and `MiniLmLanguageAnalyzer` are deleted.
+- The tokenizer's `[CLS]`/`[SEP]` bracketing and attention mask existed only to build ONNX input
+  tensors. Static pooling averages per-token vectors directly, so both were removed rather than
+  left as unreachable code.
+- Embeddings move 384 → 256 dimensions, so `PersonalizedAttentionModel.MODEL_VERSION` is 3 and
+  weights learned in the old feature space are discarded rather than reinterpreted.
+- `StaticEmbeddingParityTest` checks the Kotlin tokenizer against HuggingFace `tokenizers` on the
+  shipped vocabulary, including accented Latin and CJK. A bake-off between two encoders is
+  meaningless if one of them is not the model it claims to be, and a one-rule difference in
+  normalisation would not show up anywhere in a scorecard.
 
 ## Personalization
 
@@ -75,26 +109,40 @@ Centroids widen *when* personalization can help, never *whether* it is allowed t
 shadow pilot and every evaluation gate still hold, and the no-downgrade rule for protected
 categories is unchanged.
 
-### Deliberately deferred
+### Calibration and the package feature
 
-Three refinements from the original plan are not implemented. Each changes the feature space or
-the output shape, so each costs a version bump that discards learned weights:
+Two of the three refinements the plan deferred are now in, batched with the encoder swap so
+there is one weights reset rather than three:
 
-- **Probability calibration** (Platt scaling / tuned threshold). The blend currently feeds a raw
-  sigmoid into a score and re-buckets at fixed cutoffs, assuming 0.5 is the right decision
-  point. Calibration is the cheapest of the three and the one that most affects how the
-  probability behaves once it is blended.
-- **Hashed per-package bias feature** — would let the model learn "this workspace always
-  matters" in 2–3 corrections rather than dozens.
-- **Five-class ordinal head** — the model predicts binary, blends into a score, then re-buckets
-  into five levels, losing information twice.
+**Platt scaling.** The raw sigmoid of a class-weighted, L2-regularised fit is not a probability
+— class weighting alone shifts it — yet the score was blended and re-bucketed at fixed cutoffs
+as though 0.5 were a calibrated decision point. `refit` now fits `sigmoid(a·logit + b)` on the
+correction set, with Platt's own target correction rather than hard 0/1 so a separable set
+cannot drive the fit to infinite confidence. The slope is clamped positive: a negative slope
+would invert the ranking the weights just learned. Below 30 corrections the transform stays the
+identity, because two free parameters on a handful of points fit noise.
 
-These are best done together, and together with the static-embedding bake-off below: that
-evaluation may change the embedding to 256 dimensions, which rewrites `FEATURE_COUNT` and resets
-weights anyway. Batching them means one reset and one comparable measurement instead of four.
+**Hashed per-package bias.** 64 buckets appended to the feature vector, one set per
+notification. Sender memory is keyed per conversation, so "this Slack workspace always matters"
+had to be relearned for every new conversation inside it; the classifier can now pick that up in
+two or three corrections. Collisions are harmless — two apps sharing a bucket share a prior.
 
-They also cannot be judged properly yet. Personalization quality is only measurable against real
-correction histories, which do not exist until the app has been used for a while.
+Both land as schema v9 and `MODEL_VERSION` 4. The migration defaults calibration to slope 1 /
+intercept 0, which reproduces the previous behaviour exactly for a model fitted before it
+existed.
+
+### Still deferred: the five-class ordinal head
+
+The model still predicts binary, blends into a score, then re-buckets into five levels, losing
+information twice. It is deliberately not implemented yet.
+
+Unlike the other two, it changes the *output shape*, and every safety gate — the shadow pilot,
+the accuracy and important-recall thresholds, the no-downgrade rule for protected categories —
+is written against a binary decision. Rewriting all of them is only justified if the five-class
+head actually predicts better, and that cannot be established here: personalization quality is
+measurable only against real correction histories, which do not exist until the app has been
+used. Shipping it now would mean rewriting the safety gates on the strength of a guess.
+
 
 ## Ruled out
 
@@ -116,22 +164,6 @@ Researched July 2026; revisit only if the underlying facts change.
   PyTorch→LiteRT path still routes through ONNX, and for a model this size delegate setup and
   host↔accelerator transfer dominate the work.
 
-## Next: static-embedding bake-off
-
-`potion-base-8M` (Model2Vec static token lookup, 7.6 MB, MIT) is the candidate to beat. It
-scores above MiniLM-L6 on MTEB *classification* while losing ground on semantic similarity, and
-it needs no transformer forward pass at all.
-
-The prize is not the model size. `libonnxruntime.so` is **26.7 MB stored / 9.8 MB compressed —
-larger than the model it exists to run**. A static encoder removes the runtime entirely, which
-would take the release bundle from 25.4 MB to roughly a third of that and put inference in the
-sub-millisecond range.
-
-The risk is that the prototype-cosine urgency path is a similarity task, which is where static
-embeddings are weakest. If the bake-off favours potion, that heuristic should be retired in
-favour of the learned classifier — the task static embeddings are actually better at.
-
-Run `EncoderEvaluationTest` against both and decide on the numbers.
 
 ## Multilingual (later)
 

@@ -6,10 +6,10 @@ import kotlin.math.roundToInt
  * Symmetric INT8 storage for normalized MiniLM vectors.
  *
  * MiniLM emits unit-normalized values in [-1, 1]. Quantizing to one signed byte per dimension
- * reduces each embedding from 1,536 bytes to 384 bytes without creating inference-time pressure.
+ * reduces each embedding from 1,024 bytes to 256 bytes without creating inference-time pressure.
  */
 object EmbeddingCodec {
-    const val EXPECTED_DIMENSIONS = 384
+    const val EXPECTED_DIMENSIONS = 256
 
     fun encode(values: FloatArray?): ByteArray? {
         if (values == null || values.size != EXPECTED_DIMENSIONS) return null

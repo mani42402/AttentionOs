@@ -51,11 +51,22 @@ class EncoderEvaluationTest {
         val categoryHint: String? = null,
     )
 
+    /**
+     * Scores the shipped encoder.
+     *
+     * This ran against `all-MiniLM-L6-v2` as well during the Phase 2 bake-off; the transformer
+     * lost and was deleted, so only the survivor is scored now. The recorded numbers are in
+     * docs/MODEL_STRATEGY.md — re-add a second candidate here to repeat the comparison.
+     */
     @Test
-    fun scoreEncoderAgainstLabelledSet() {
+    fun scoreShippedEncoder() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
-        val analyzer = MiniLmLanguageAnalyzer(context)
+        val analyzer = StaticEmbeddingAnalyzer(context)
         analyzer.warmUp()
+        score(StaticEmbeddingAnalyzer.modelVersion(), analyzer)
+    }
+
+    private fun score(modelName: String, analyzer: com.attentionos.domain.LanguageAnalyzer) {
         val engine = PriorityEngine(analyzer)
 
         var categoryHits = 0
@@ -68,6 +79,7 @@ class EncoderEvaluationTest {
         val latenciesMicros = mutableListOf<Long>()
         val failures = mutableListOf<String>()
         val softMisses = mutableListOf<String>()
+        val categoryMisses = mutableListOf<String>()
 
         for (sample in SAMPLES) {
             val signal = NotificationSignal(
@@ -89,7 +101,11 @@ class EncoderEvaluationTest {
             }
             latenciesMicros += nanos / 1_000
 
-            if (decision.category == sample.category) categoryHits++
+            if (decision.category == sample.category) {
+                categoryHits++
+            } else {
+                categoryMisses += "${sample.title} -> ${decision.category} (want ${sample.category})"
+            }
 
             val ranked = decision.priority.ordinal <= HIGH_ORDINAL
             if (sample.guaranteed) {
@@ -122,13 +138,14 @@ class EncoderEvaluationTest {
             """
             |
             |=== encoder scorecard =========================================
-            |  model              ${MiniLmLanguageAnalyzer.modelVersion()}
+            |  model              $modelName
             |  samples            ${SAMPLES.size}
             |  category accuracy  ${"%.1f".format(categoryAccuracy * 100)}%
             |  guaranteed alerts  ${"%.1f".format(guaranteedRecall * 100)}%  ($guaranteedRanked/$guaranteedTotal)   [asserted]
             |  wanted promptly    ${"%.1f".format(wantedRecall * 100)}%  ($wantedRanked/$wantedTotal)   [measured]
             |  correctly quiet    ${"%.1f".format(quietPrecision * 100)}%  ($quietCorrect/$quietTotal)
             |  ranked low but wanted: ${if (softMisses.isEmpty()) "none" else softMisses.joinToString("; ")}
+            |  category misses:   ${if (categoryMisses.isEmpty()) "none" else categoryMisses.joinToString("\n                     ")}
             |  latency median     ${"%.1f".format(median)} ms
             |  latency p90        ${"%.1f".format(p90)} ms
             |===============================================================
@@ -183,6 +200,43 @@ class EncoderEvaluationTest {
             Sample("com.social", "New follower", "Someone started following you", NotificationCategory.SOCIAL, guaranteed = false),
             Sample("com.game", "Daily reward", "Your daily bonus is waiting", NotificationCategory.PROMOTION, guaranteed = false),
             Sample("com.calendar", "Meeting reminder", "Design review starts in 10 minutes", NotificationCategory.WORK, guaranteed = false),
+
+            // --- second tranche -------------------------------------------------------------
+            // Twenty samples cannot separate two encoders: one disagreement moves the score by
+            // five points. These widen the set so a difference has to be real to show up, and
+            // lean on the phrasings where a bag-of-tokens encoder is theoretically weakest —
+            // negation, word order, and vocabulary shared across categories.
+            Sample("com.bank.app", "Payment failed", "We could not process your card ending 4421", NotificationCategory.FINANCE, guaranteed = true),
+            Sample("com.bank.app", "Transfer complete", "Your transfer of \$1,200 has been sent", NotificationCategory.FINANCE, guaranteed = true),
+            Sample("com.auth.app", "New sign-in", "Someone signed in to your account from Berlin", NotificationCategory.SECURITY, guaranteed = true),
+            Sample("com.auth.app", "Password changed", "Your password was changed successfully", NotificationCategory.SECURITY, guaranteed = true),
+            Sample("com.email", "Invoice overdue", "Invoice 3312 is 14 days past due", NotificationCategory.FINANCE, guaranteed = true),
+            Sample("com.slack", "Deploy failed", "The release pipeline stopped on the migration step", NotificationCategory.WORK, guaranteed = false, shouldRankHigh = true),
+            Sample("com.slack", "Standup notes", "Notes from this morning are in the channel", NotificationCategory.WORK, guaranteed = false),
+            Sample("com.email", "Contract signed", "The client countersigned this afternoon", NotificationCategory.WORK, guaranteed = false),
+            Sample("com.calendar", "Tomorrow", "Retrospective moved to Thursday", NotificationCategory.WORK, guaranteed = false),
+            Sample("com.whatsapp", "Sam", "Running fifteen minutes late, sorry", NotificationCategory.SOCIAL, guaranteed = false, isConversation = true),
+            Sample("com.whatsapp", "Mum", "Give me a ring when you get a chance", NotificationCategory.SOCIAL, guaranteed = false, isConversation = true),
+            Sample("com.messenger", "Group chat", "Anyone free for dinner on Friday?", NotificationCategory.SOCIAL, guaranteed = false, isConversation = true),
+            Sample("com.social", "Photo tagged", "You were tagged in a photo", NotificationCategory.SOCIAL, guaranteed = false),
+            Sample("com.shop.app", "Final hours", "Everything must go before midnight", NotificationCategory.PROMOTION, guaranteed = false),
+            // Promotion borrowing security vocabulary on purpose.
+            Sample("com.shop.app", "Your account needs attention", "Claim your reward points before they expire", NotificationCategory.PROMOTION, guaranteed = false),
+            Sample("com.travel", "Fare drop", "Flights to Lisbon are cheaper this week", NotificationCategory.PROMOTION, guaranteed = false),
+            Sample("com.delivery", "Delivered", "Your parcel was left in the porch", NotificationCategory.DELIVERY, guaranteed = false),
+            Sample("com.delivery", "Delayed", "Your shipment will now arrive on Thursday", NotificationCategory.DELIVERY, guaranteed = false),
+            Sample("com.food", "Order confirmed", "The restaurant is preparing your food", NotificationCategory.DELIVERY, guaranteed = false),
+            Sample("com.android.systemui", "Storage low", "Less than 1 GB of space remains", NotificationCategory.SYSTEM, guaranteed = false),
+            Sample("com.android.systemui", "Battery saver on", "Battery saver turned on at 15%", NotificationCategory.SYSTEM, guaranteed = false),
+            Sample("com.android.vending", "Apps updated", "Three apps were updated overnight", NotificationCategory.SYSTEM, guaranteed = false),
+            Sample("com.news.app", "Breaking", "Central bank holds interest rates", NotificationCategory.OTHER, guaranteed = false),
+            Sample("com.podcast", "New episode", "The show you follow just published", NotificationCategory.OTHER, guaranteed = false),
+            Sample("com.fitness", "Move goal", "You are 400 steps from your goal", NotificationCategory.OTHER, guaranteed = false),
+            Sample("com.game", "Come back", "Your village misses you", NotificationCategory.PROMOTION, guaranteed = false),
+            Sample("com.phone", "Voicemail", "New voicemail from an unknown number", NotificationCategory.OTHER, guaranteed = false),
+            Sample("com.clock", "Timer finished", "Your 20 minute timer is done", NotificationCategory.OTHER, guaranteed = true, categoryHint = "alarm"),
+            Sample("com.health", "Prescription ready", "Collect your prescription from the pharmacy", NotificationCategory.OTHER, guaranteed = false, shouldRankHigh = true),
+            Sample("com.school", "Absence recorded", "Your child was marked absent this morning", NotificationCategory.OTHER, guaranteed = false, shouldRankHigh = true),
         )
     }
 }

@@ -13,14 +13,17 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -32,7 +35,10 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
@@ -43,16 +49,18 @@ import com.attentionos.ui.MainViewModel
 import com.attentionos.ui.UiEvent
 import com.attentionos.ui.components.rememberNotificationAccess
 import com.attentionos.ui.home.DashboardScreen
-import com.attentionos.ui.insights.SimpleSummaryScreen
+import com.attentionos.ui.insights.InsightsScreen
 import com.attentionos.ui.navigation.AppDestination
 import com.attentionos.ui.navigation.AttentionNavHost
 import com.attentionos.ui.navigation.HelperBottomBar
+import com.attentionos.ui.navigation.HelperNavigationRail
 import com.attentionos.ui.navigation.navigateToTab
 import com.attentionos.ui.onboarding.OnboardingScreen
 import com.attentionos.ui.review.ActivityScreen
 import com.attentionos.ui.settings.SettingsScreen
 import com.attentionos.ui.theme.AttentionTheme
-import com.attentionos.ui.theme.Forest950
+import com.attentionos.ui.theme.AppCanvas
+import com.attentionos.ui.theme.ThemeMode
 import kotlinx.coroutines.flow.MutableStateFlow
 
 class MainActivity : ComponentActivity() {
@@ -88,7 +96,8 @@ class MainActivity : ComponentActivity() {
             }
 
             AttentionTheme(
-                darkTheme = uiState.settings.darkTheme,
+                themeMode = ThemeMode.fromStorage(uiState.settings.themeMode),
+                dynamicColor = uiState.settings.dynamicColor,
                 motionEnabled = uiState.settings.motionEnabled,
             ) {
                 val reviewRequest by openReviewRequest.collectAsStateWithLifecycle()
@@ -111,11 +120,12 @@ class MainActivity : ComponentActivity() {
                     }
                 }
 
-                Surface(
-                    modifier = Modifier.fillMaxSize(),
-                    color = MaterialTheme.colorScheme.background,
-                    contentColor = MaterialTheme.colorScheme.onBackground,
-                ) {
+                val darkCanvas = when (ThemeMode.fromStorage(uiState.settings.themeMode)) {
+                    ThemeMode.System -> androidx.compose.foundation.isSystemInDarkTheme()
+                    ThemeMode.Light -> false
+                    ThemeMode.Dark -> true
+                }
+                AppCanvas(dark = darkCanvas) {
                     if (!uiState.isLoading && !uiState.settings.onboardingComplete) {
                         OnboardingScreen(
                             state = uiState,
@@ -148,7 +158,8 @@ class MainActivity : ComponentActivity() {
                         onMediumVibrationChanged = viewModel::setMediumVibration,
                         onReminderChanged = viewModel::setReviewReminderEnabled,
                         onReminderTimesChanged = viewModel::setReviewReminderTimes,
-                        onDarkThemeChanged = viewModel::setDarkTheme,
+                        onThemeModeChanged = viewModel::setThemeMode,
+                        onDynamicColorChanged = viewModel::setDynamicColor,
                         onMotionChanged = viewModel::setMotionEnabled,
                         onScreenSecurityChanged = viewModel::setScreenSecurity,
                         onRequestNotificationPermission = ::requestNotificationPermission,
@@ -211,7 +222,8 @@ private fun AttentionApp(
     onMediumVibrationChanged: (Boolean) -> Unit,
     onReminderChanged: (Boolean) -> Unit,
     onReminderTimesChanged: (Set<Int>) -> Unit,
-    onDarkThemeChanged: (Boolean) -> Unit,
+    onThemeModeChanged: (ThemeMode) -> Unit,
+    onDynamicColorChanged: (Boolean) -> Unit,
     onMotionChanged: (Boolean) -> Unit,
     onScreenSecurityChanged: (Boolean) -> Unit,
     onRequestNotificationPermission: () -> Unit,
@@ -233,22 +245,47 @@ private fun AttentionApp(
     }
     val hasAccess = rememberNotificationAccess()
 
+    // A bottom dock on a tablet or unfolded device puts the primary controls far from the eye
+    // and spends height the content wants. The rail is the same four items, rotated.
+    val wide = with(LocalConfiguration.current) { screenWidthDp >= WIDE_WINDOW_DP }
+
     Scaffold(
         modifier = Modifier.fillMaxSize(),
-        containerColor = MaterialTheme.colorScheme.background,
+        containerColor = androidx.compose.ui.graphics.Color.Transparent,
         contentWindowInsets = WindowInsets(0),
         snackbarHost = { SnackbarHost(snackbarHostState) },
         bottomBar = {
-            HelperBottomBar(
-                selected = destination,
-                onSelected = navController::navigateToTab,
-            )
+            if (!wide) {
+                HelperBottomBar(
+                    selected = destination,
+                    onSelected = navController::navigateToTab,
+                )
+            }
         },
     ) { scaffoldPadding ->
-        Box(Modifier.fillMaxSize()) {
+        Row(Modifier.fillMaxSize()) {
+            if (wide) {
+                HelperNavigationRail(
+                    selected = destination,
+                    onSelected = navController::navigateToTab,
+                )
+            }
+            // The weight has to sit on a wrapper: a weight modifier hands the child an exact
+            // width, which would override any cap placed alongside it.
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxHeight(),
+                contentAlignment = Alignment.TopCenter,
+            ) {
             AttentionNavHost(
                 navController = navController,
-                modifier = Modifier.padding(bottom = scaffoldPadding.calculateBottomPadding()),
+                // Capped and centred: a paragraph that spans a tablet is measurably harder to
+                // read, and these layouts are one column by design.
+                modifier = Modifier
+                    .widthIn(max = READING_WIDTH_MAX)
+                    .fillMaxSize()
+                    .padding(bottom = scaffoldPadding.calculateBottomPadding()),
                 home = {
                     DashboardScreen(
                         state = state,
@@ -266,9 +303,10 @@ private fun AttentionApp(
                     )
                 },
                 insights = {
-                    SimpleSummaryScreen(
+                    InsightsScreen(
                         state = state,
                         onReview = { navController.navigateToTab(AppDestination.ACTIVITY) },
+                        onRunTestLab = onRunTestLab,
                     )
                 },
                 settings = {
@@ -287,7 +325,8 @@ private fun AttentionApp(
                         onMediumVibrationChanged = onMediumVibrationChanged,
                         onReminderChanged = onReminderChanged,
                         onReminderTimesChanged = onReminderTimesChanged,
-                        onDarkThemeChanged = onDarkThemeChanged,
+                        onThemeModeChanged = onThemeModeChanged,
+                        onDynamicColorChanged = onDynamicColorChanged,
                         onMotionChanged = onMotionChanged,
                         onScreenSecurityChanged = onScreenSecurityChanged,
                         onRequestNotificationPermission = onRequestNotificationPermission,
@@ -300,15 +339,18 @@ private fun AttentionApp(
                     )
                 },
             )
-            // Android 15+ enforces edge-to-edge. Keep status icons readable on every tab.
-            Spacer(
-                Modifier
-                    .fillMaxWidth()
-                    .height(WindowInsets.statusBars.asPaddingValues().calculateTopPadding())
-                    .background(Forest950),
-            )
+            }
         }
     }
 }
 
+/**
+ * The Material breakpoint between a compact and a medium window.
+ *
+ * Chosen over a window-size-class dependency because the only decision being made here is dock
+ * versus rail, and `screenWidthDp` already tracks folding and rotation.
+ */
+private const val WIDE_WINDOW_DP = 600
 
+/** Roughly 90 characters at the body size: past this, line length starts costing comprehension. */
+private val READING_WIDTH_MAX = 720.dp

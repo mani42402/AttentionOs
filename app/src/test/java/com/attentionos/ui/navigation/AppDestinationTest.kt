@@ -32,7 +32,9 @@ class AppDestinationTest {
     }
 
     @Test
-    fun `every destination has a label for the bottom bar`() {
-        assertTrue(AppDestination.entries.none { it.label.isBlank() })
+    fun `every destination has a distinct label resource for the bottom bar`() {
+        val labels = AppDestination.entries.map { it.label }
+        assertTrue("labels must resolve to a resource", labels.none { it == 0 })
+        assertEquals("labels must be distinct", labels.size, labels.toSet().size)
     }
 }

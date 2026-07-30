@@ -9,7 +9,7 @@ Android notification
 NotificationListenerService
         │ copies bounded fields
         ▼
-PriorityEngine ── MiniLM transformer (INT8, ONNX Runtime)
+PriorityEngine ── potion-base-8M static embeddings (INT8, memory-mapped)
         │             └── deterministic safety fallback
         ├── Personal logistic model (after activation gate)
         ▼
@@ -30,12 +30,12 @@ Explicit Important / Not important feedback overrides passive behavioral inferen
 updates sender memory and writes a high-confidence HIGH or LOW training label; notification opens
 and dismissals remain useful but lower-confidence implicit signals.
 
-Each model-backed decision carries MiniLM's 384-dimensional normalized embedding. The app stores it
-with the event and eventual training example using symmetric INT8 quantization (384 bytes rather
+Each model-backed decision carries a 256-dimensional normalized embedding. The app stores it
+with the event and eventual training example using symmetric INT8 quantization (256 bytes rather
 than 1,536 bytes as Float32). Exports include the Base64-encoded vector, encoding metadata, and exact
 language-model version so training jobs cannot silently mix incompatible feature spaces.
 
-The personalized classifier has 390 inputs: the frozen 384-dimensional MiniLM embedding, hour
+The personalized classifier has 326 inputs: the frozen 256-dimensional embedding, hour
 sine/cosine, sender importance, sender open rate, focus-mode state, and the safe engine's base
 score. A correction runs one bounded stochastic-gradient update and persists 390 Float32 weights
 (about 1.6 KB) plus a bias and class counts. No background training job, wake lock, or model
@@ -61,7 +61,7 @@ uniquely named periodic task per selected time, requires a non-low battery, and 
 shared silent low-importance channel. Updating the set cancels and rebuilds only tagged reminder
 work.
 
-## Why the MVP uses MiniLM instead of a generative LLM
+## Why the app embeds rather than generates
 
 A generative model creates unnecessary token-generation latency and memory pressure for a
 classification task. The MVP runs a real three-layer pretrained transformer that produces
@@ -108,7 +108,7 @@ app/src/main/java/com/attentionos/
 ├── data/settings/ DataStore-backed preferences
 ├── data/repository/ decision recording, feedback, hashing
 ├── domain/        priority engine, shared AttentionPolicy, models
-├── ai/            ONNX analyzer and WordPiece tokenizer
+├── ai/            static-embedding analyzer and WordPiece tokenizer
 ├── service/       notification listener, reminder and retention workers
 ├── training/      local personalized classifier and export
 └── ui/            theme, components, navigation, and one package per screen
@@ -135,35 +135,67 @@ personalization policy, where divergence would silently change safety behaviour.
 - Reminder scheduling is a no-op when the stored schedule has not changed.
 - UI motion can be disabled; continuous ambient animations are not composed when off.
 
-## Measured size
+## Measured budgets (Phase 2)
 
-Universal release APKs overstate delivery size because Android stores native libraries
-uncompressed so they can be mapped without extraction. The figure that matters is the bundle
-Play consumes.
+Re-measured per phase, on an Android 16 emulator with the minified release build. Emulator
+startup is pessimistic by roughly 2-3x against real hardware; the per-notification figure is
+device-independent enough to compare directly.
 
-| Artifact | Size |
-|---|---|
-| Release AAB (what Play ingests) | 25.4 MB |
-| Universal release APK (local only) | 46 MB |
-| `libonnxruntime.so` | 26.7 MB stored, 9.8 MB compressed |
-| MiniLM model asset | 16.7 MB |
+| Budget | Target | Measured |
+|---|---|---|
+| Download size | <= 30 MB | 9.8 MB |
+| Install footprint | not previously tracked | 11.9 MB |
+| Per-notification inference | well under the battery budget | 1.9 ms median, 3.3 ms p90 |
+| Encoder load, once per process | one-off | ~1.7 s cold, then cached |
+| Cold start, minified release | no target set | ~1.24 s median (840-1746 ms, emulator) |
 
-The ONNX Runtime native library is larger than the model it runs. That is the strongest argument
-for the static-embedding evaluation planned for the design phase: adopting a token-lookup model
-would remove the runtime entirely and shrink the model, taking the bundle to roughly a third of
-its current size.
+The encoder load reads a 29,528-line vocabulary and maps the table. It happens once per process
+on the first notification, off the UI thread, and never again.
+
+Verified on the minified release build (R8 + resource shrinking, signed with a debug keystore for
+local install): the encoder loads once, notifications classify, the encrypted database is created,
+and no keep-rule was missed — zero crashes and zero keyword-fallback warnings, which is what a
+stripped class or a shrunk asset would produce.
+
+A **baseline profile and macrobenchmark are deliberately not here.** The plan schedules them
+after Phase 2, they need a separate benchmark module, and the startup figure above does not yet
+show a problem worth that infrastructure. Startup should be re-measured on real hardware before
+deciding.
+
+### How it got here
+
+The encoder was `all-MiniLM-L6-v2` on ONNX Runtime until the Phase 2 bake-off. The runtime alone
+measured 26.7 MB — larger than the model it existed to run — and the pair accounted for 91% of
+the binary. Replacing both with a static token-lookup table took the download from 29.9 MB to
+9.8 MB and the install footprint from 53.3 MB to 11.9 MB, with no measurable quality loss on the
+labelled set. `docs/MODEL_STRATEGY.md` records both scorecards.
 
 ## Interface system
 
-The Compose interface uses a restrained navy, cobalt, and teal light/dark color system, a compact
-typography scale, consistent shapes, a full-width fixed bottom menu, and reusable control panels.
-Canvas draws the small custom navigation icons and distribution bars directly, avoiding an icon or
-charting dependency. Navigation selection and other short transitions animate only when the
-persistent Motion effects preference is enabled.
+The Compose interface is the Signal Garden system: an ink/cream canvas with tangerine, mint and
+sun accents, one pigment set shared by the onboarding artwork and the native screens, and a single
+inverted feature surface per screen carrying the hero content. `docs/DESIGN_SYSTEM.md` holds the
+tokens and the component inventory.
 
-Onboarding is replayable from Settings. It explains the helper in plain language and includes a
-safe interactive notification demo that saves nothing. Replaying changes only the completion flag:
-the original pilot start time, decisions, training examples, and personalized weights remain intact.
+Canvas draws the navigation glyphs, the priority flow lanes, the distribution bar and the
+completion burst directly, avoiding an icon or charting dependency. Every chart encodes its data —
+a lane whose geometry ignores its value is not allowed, because it reads as a measurement.
+
+Navigation is a floating dock below 600 dp and a rail above it, from one shared item composable so
+the two cannot drift apart. Content is capped to a readable measure on wide windows. Motion is
+gated on the persistent preference throughout, and continuous ambient animation is not composed
+when it is off.
+
+Accessibility is asserted rather than reviewed: `AccessibilitySemanticsTest` checks that drawn
+charts carry spoken values, that a zero lane still announces its number, that section titles are
+headings, that decision rows merge into one announcement, and that the protection toggle exposes
+its state. Progress bars carry `progressBarRangeInfo`. RTL mirrors the directional charts, which
+otherwise pointed away from their labels because a Canvas draws in physical coordinates.
+
+Onboarding is replayable from Settings. Three full-bleed illustrated chapters explain the helper in
+plain language, with swipe, buttons and predictive back all stepping through. Replaying changes
+only the completion flag: the original pilot start time, decisions, training examples, and
+personalized weights remain intact.
 
 ## Fine-tuning path
 

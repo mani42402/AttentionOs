@@ -12,7 +12,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         TrainingExampleEntity::class,
         PersonalizedModelEntity::class,
     ],
-    version = 8,
+    version = 9,
     exportSchema = true,
 )
 abstract class AttentionDatabase : RoomDatabase() {
@@ -139,6 +139,21 @@ abstract class AttentionDatabase : RoomDatabase() {
          * classifier is still noise, so this is what lets personalization mean anything for
          * users who never reach the 50-correction bar.
          */
+        val MIGRATION_8_9 = object : Migration(8, 9) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                // Identity defaults: an existing model was fitted without calibration, and
+                // slope 1 / intercept 0 reproduces exactly what it did before.
+                database.execSQL(
+                    "ALTER TABLE personalized_model " +
+                        "ADD COLUMN calibrationSlope REAL NOT NULL DEFAULT 1.0",
+                )
+                database.execSQL(
+                    "ALTER TABLE personalized_model " +
+                        "ADD COLUMN calibrationIntercept REAL NOT NULL DEFAULT 0.0",
+                )
+            }
+        }
+
         val MIGRATION_7_8 = object : Migration(7, 8) {
             override fun migrate(database: SupportSQLiteDatabase) {
                 database.execSQL(

@@ -21,42 +21,42 @@ import org.junit.Test
 class WordPieceTokenizerTest {
 
     private val tokenizer: WordPieceTokenizer by lazy {
-        val vocabFile = File("src/main/assets/models/minilm-vocab.txt")
+        val vocabFile = File("src/main/assets/models/potion-vocab.txt")
         assertTrue("vocabulary asset missing at ${vocabFile.absolutePath}", vocabFile.exists())
         WordPieceTokenizer(vocabFile.readLines())
     }
 
-    private data class Golden(val text: String, val ids: List<Long>)
+    private data class Golden(val text: String, val ids: List<Int>)
 
-    private fun golden(text: String, vararg ids: Long) = Golden(text, ids.toList())
+    private fun golden(text: String, vararg ids: Int) = Golden(text, ids.toList())
 
     private val goldens: List<Golden> = listOf(
-        golden("Need production fix ASAP", 101L, 2342L, 2537L, 8081L, 17306L, 2361L, 102L),
-        golden("Your verification code is 448 291", 101L, 2115L, 22616L, 3642L, 2003L, 4008L, 2620L, 27173L, 102L),
-        golden("hello", 101L, 7592L, 102L),
-        golden("", 101L, 102L),
-        golden("   ", 101L, 102L),
-        golden("Café naïve résumé", 101L, 7668L, 15743L, 13746L, 102L),
-        golden("Payment of \$42.50 was debited", 101L, 7909L, 1997L, 1002L, 4413L, 1012L, 2753L, 2001L, 2139L, 16313L, 2098L, 102L),
-        golden("https://example.com/path?q=1", 101L, 16770L, 1024L, 1013L, 1013L, 2742L, 1012L, 4012L, 1013L, 4130L, 1029L, 1053L, 1027L, 1015L, 102L),
-        golden("Meeting at 3:30pm — don't be late!", 101L, 3116L, 2012L, 1017L, 1024L, 2382L, 9737L, 1517L, 2123L, 1005L, 1056L, 2022L, 2397L, 999L, 102L),
-        golden("你好世界", 101L, 100L, 100L, 1745L, 100L, 102L),
-        golden("紧急：生产环境故障", 101L, 100L, 100L, 1993L, 1910L, 100L, 100L, 100L, 100L, 100L, 102L),
-        golden("Hello 你好 world", 101L, 7592L, 100L, 100L, 2088L, 102L),
-        golden("こんにちは", 101L, 1655L, 30217L, 30194L, 30188L, 30198L, 102L),
-        golden("안녕하세요", 101L, 1463L, 30006L, 30021L, 29992L, 30010L, 30025L, 30005L, 30006L, 29997L, 30009L, 29999L, 30013L, 102L),
-        golden("🚨 Emergency alert 🚨", 101L, 100L, 5057L, 9499L, 100L, 102L),
-        golden("supercalifragilisticexpialidocious", 101L, 3565L, 9289L, 10128L, 29181L, 24411L, 4588L, 10288L, 19312L, 21273L, 10085L, 6313L, 102L),
-        golden("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", 101L, 100L, 102L),
-        golden("UPPERCASE TEXT HERE", 101L, 3356L, 18382L, 3793L, 2182L, 102L),
-        golden("multiple     spaces\tand\nnewlines", 101L, 3674L, 7258L, 1998L, 2047L, 12735L, 102L),
-        golden("unaffordableword", 101L, 14477L, 4246L, 8551L, 3085L, 18351L, 102L),
+        golden("Need production fix ASAP", 1348, 1543, 7087, 16312, 1367),
+        golden("Your verification code is 448 291", 1121, 21622, 2648, 1009, 3014, 1626, 26179),
+        golden("hello", 6598),
+        golden(""),
+        golden("   "),
+        golden("Café naïve résumé", 6674, 14749, 12752),
+        golden("Payment of \$42.50 was debited", 6915, 1003, 8, 3419, 18, 1759, 1007, 1145, 15319, 1104),
+        golden("https://example.com/path?q=1", 15776, 30, 19, 19, 1748, 18, 3018, 19, 3136, 35, 59, 33, 21),
+        golden("Meeting at 3:30pm — don't be late!", 2122, 1018, 23, 30, 1388, 8743, 523, 1129, 11, 62, 1028, 1403, 5),
+        golden("你好世界", 1, 1, 751, 1),
+        golden("紧急：生产环境故障", 1, 1, 999, 916, 1, 1, 1, 1, 1),
+        golden("Hello 你好 world", 6598, 1, 1, 1094),
+        golden("こんにちは", 661, 29223, 29200, 29194, 29204),
+        golden("안녕하세요", 469, 29012, 29027, 28998, 29016, 29031, 29011, 29012, 29003, 29015, 29005, 29019),
+        golden("🚨 Emergency alert 🚨", 1, 4063, 8505, 1),
+        golden("supercalifragilisticexpialidocious", 2571, 8295, 9134, 28187, 23417, 3594, 9294, 18318, 20279, 9091, 5319),
+        golden("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", 1),
+        golden("UPPERCASE TEXT HERE", 2362, 17388, 2799, 1188),
+        golden("multiple     spaces\tand\nnewlines", 2680, 6264, 1004, 1053, 11741),
+        golden("unaffordableword", 13483, 3252, 7557, 2091, 17357),
     )
 
     @Test
     fun `matches reference tokenizer on golden vectors`() {
         val failures = goldens.mapNotNull { expected ->
-            val actual = tokenizer.encode(expected.text, MAX_TOKENS).ids.toList()
+            val actual = tokenizer.encodePieces(expected.text, MAX_TOKENS).toList()
             if (actual == expected.ids) {
                 null
             } else {
@@ -74,23 +74,23 @@ class WordPieceTokenizerTest {
     fun `CJK text segments per character rather than collapsing to one unknown`() {
         // Previously the word pattern swallowed a whole run of ideographs as a single "word",
         // WordPiece failed on it, and the sentence became [CLS] [UNK] [SEP].
-        val ids = tokenizer.encode("你好世界", MAX_TOKENS).ids
-        assertEquals("expected one token per ideograph plus [CLS]/[SEP]", 6, ids.size)
+        val ids = tokenizer.encodePieces("你好世界", MAX_TOKENS)
+        assertEquals("expected one token per ideograph", 4, ids.size)
     }
 
     @Test
     fun `different CJK sentences no longer produce identical encodings`() {
         // This is the bug that mattered: every Chinese notification used to encode the same
         // way, so they all embedded identically and carried no information at all.
-        val greeting = tokenizer.encode("你好世界", MAX_TOKENS).ids.toList()
-        val incident = tokenizer.encode("紧急：生产环境故障", MAX_TOKENS).ids.toList()
+        val greeting = tokenizer.encodePieces("你好世界", MAX_TOKENS).toList()
+        val incident = tokenizer.encodePieces("紧急：生产环境故障", MAX_TOKENS).toList()
         assertNotEquals(greeting, incident)
     }
 
     @Test
     fun `kana and hangul tokenize without collapsing to unknown`() {
         for (text in listOf("こんにちは", "안녕하세요")) {
-            val ids = tokenizer.encode(text, MAX_TOKENS).ids
+            val ids = tokenizer.encodePieces(text, MAX_TOKENS)
             assertTrue("\"$text\" should segment into several tokens", ids.size > 3)
             assertTrue(
                 "\"$text\" should not be entirely unknown",
@@ -101,34 +101,20 @@ class WordPieceTokenizerTest {
 
     @Test
     fun `latin words survive alongside CJK in mixed text`() {
-        val ids = tokenizer.encode("Hello 你好 world", MAX_TOKENS).ids.toList()
-        assertTrue("\"hello\" should still be recognised", ids.contains(7592L))
-        assertTrue("\"world\" should still be recognised", ids.contains(2088L))
+        val ids = tokenizer.encodePieces("Hello 你好 world", MAX_TOKENS).toList()
+        assertTrue("\"hello\" should still be recognised", ids.contains(6598))
+        assertTrue("\"world\" should still be recognised", ids.contains(1094))
     }
 
     @Test
     fun `encoding is truncated to the token budget`() {
         val long = List(200) { "notification" }.joinToString(" ")
-        val encoded = tokenizer.encode(long, MAX_TOKENS)
-        assertEquals(MAX_TOKENS, encoded.ids.size)
-        assertEquals(MAX_TOKENS, encoded.mask.size)
-        assertEquals("last token must remain [SEP]", SEP_ID, encoded.ids.last())
+        assertEquals(MAX_TOKENS, tokenizer.encodePieces(long, MAX_TOKENS).size)
     }
 
     @Test
-    fun `short input is not padded so the model runs a shorter sequence`() {
-        val encoded = tokenizer.encode("hello", MAX_TOKENS)
-        assertEquals("[CLS] hello [SEP]", 3, encoded.ids.size)
-        assertTrue("every position must be attended", encoded.mask.all { it == 1L })
-    }
-
-    @Test
-    fun `always brackets the sequence with CLS and SEP`() {
-        for (text in listOf("", "hi", "a much longer notification body here")) {
-            val ids = tokenizer.encode(text, MAX_TOKENS).ids
-            assertEquals("CLS missing for \"$text\"", CLS_ID, ids.first())
-            assertEquals("SEP missing for \"$text\"", SEP_ID, ids.last())
-        }
+    fun `short input produces exactly its own tokens`() {
+        assertEquals(1, tokenizer.encodePieces("hello", MAX_TOKENS).size)
     }
 
     @Test
@@ -149,13 +135,13 @@ class WordPieceTokenizerTest {
 
     @Test
     fun `reports the shipped vocabulary size`() {
-        assertEquals(30_522, tokenizer.vocabularySize)
+        assertEquals(29_528, tokenizer.vocabularySize)
     }
 
     private companion object {
         const val MAX_TOKENS = 64
-        const val CLS_ID = 101L
-        const val SEP_ID = 102L
-        const val UNK_ID = 100L
+        const val CLS_ID = 101
+        const val SEP_ID = 102
+        const val UNK_ID = 100
     }
 }

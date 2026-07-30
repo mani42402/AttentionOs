@@ -89,4 +89,7 @@ data class PersonalizedModelEntity(
     /** Class means over embeddings, used before the classifier has enough data. */
     val importantCentroid: ByteArray? = null,
     val notImportantCentroid: ByteArray? = null,
+    /** Platt scaling fitted at the last refit; identity until there are enough corrections. */
+    val calibrationSlope: Float = 1f,
+    val calibrationIntercept: Float = 0f,
 )

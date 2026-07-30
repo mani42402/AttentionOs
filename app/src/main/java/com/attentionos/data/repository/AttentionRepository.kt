@@ -2,7 +2,7 @@ package com.attentionos.data.repository
 
 import android.util.Log
 import com.attentionos.BuildConfig
-import com.attentionos.ai.MiniLmLanguageAnalyzer
+import com.attentionos.ai.StaticEmbeddingAnalyzer
 import com.attentionos.core.common.TimeConstants
 import com.attentionos.data.db.AttentionDao
 import com.attentionos.data.db.NotificationEventEntity
@@ -404,6 +404,7 @@ class AttentionRepository(
             senderOpenRate = memory?.openRate ?: 0.5f,
             focusModeEnabled = context.focusModeEnabled,
             baseScore = base.score,
+            packageName = signal.packageName,
         ) ?: return PersonalizationOutcome(base, null, false)
         val logisticProbability = PersonalizedAttentionModel.predict(state, features)
 
@@ -513,6 +514,7 @@ class AttentionRepository(
             senderOpenRate = event.senderOpenRateAtDecision,
             focusModeEnabled = event.focusModeAtDecision,
             baseScore = event.baseScoreAtDecision,
+            packageName = event.packageName,
         ) ?: return
 
         modelMutex.withLock {
@@ -561,7 +563,7 @@ class AttentionRepository(
      * describe a different space and would poison the fit.
      */
     private suspend fun replaySamples(): List<TrainingSample> =
-        dao.correctedEvents(modelVersion = MiniLmLanguageAnalyzer.modelVersion())
+        dao.correctedEvents(modelVersion = StaticEmbeddingAnalyzer.modelVersion())
             .mapNotNull { event ->
                 val features = PersonalizedAttentionModel.features(
                     embedding = EmbeddingCodec.decode(event.embeddingQ8),
@@ -570,6 +572,7 @@ class AttentionRepository(
                     senderOpenRate = event.senderOpenRateAtDecision,
                     focusModeEnabled = event.focusModeAtDecision,
                     baseScore = event.baseScoreAtDecision,
+                    packageName = event.packageName,
                 ) ?: return@mapNotNull null
                 TrainingSample(features, event.action == UserAction.IMPORTANT.name)
             }
@@ -589,6 +592,8 @@ class AttentionRepository(
             importantCorrectCount = importantCorrectCount,
             notImportantEvaluationCount = notImportantEvaluationCount,
             falseImportantCount = falseImportantCount,
+            calibrationSlope = calibrationSlope,
+            calibrationIntercept = calibrationIntercept,
         )
     }
 
@@ -614,6 +619,8 @@ class AttentionRepository(
             notImportantCentroid = centroids?.let {
                 ModelWeightsCodec.encodeVector(it.notImportant)
             },
+            calibrationSlope = calibrationSlope,
+            calibrationIntercept = calibrationIntercept,
         )
 
     private fun isSafetyProtected(

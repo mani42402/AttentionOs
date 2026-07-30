@@ -2,7 +2,7 @@ package com.attentionos.core.di
 
 import android.app.Application
 import androidx.room.Room
-import com.attentionos.ai.MiniLmLanguageAnalyzer
+import com.attentionos.ai.StaticEmbeddingAnalyzer
 import com.attentionos.data.db.AttentionDatabase
 import com.attentionos.data.repository.AttentionRepository
 import com.attentionos.data.settings.AppSettings
@@ -70,6 +70,7 @@ class AppContainer(
                 AttentionDatabase.MIGRATION_5_6,
                 AttentionDatabase.MIGRATION_6_7,
                 AttentionDatabase.MIGRATION_7_8,
+                AttentionDatabase.MIGRATION_8_9,
             )
             // No destructive fallback. Dropping every table would erase the user's history,
             // learned sender memory and personalized model without warning; a migration defect
@@ -102,8 +103,8 @@ class AppContainer(
         )
     }
 
-    private val languageAnalyzer: MiniLmLanguageAnalyzer by lazy {
-        MiniLmLanguageAnalyzer(application)
+    private val languageAnalyzer: StaticEmbeddingAnalyzer by lazy {
+        StaticEmbeddingAnalyzer(application)
     }
 
     val exportManager: ExportManager by lazy {

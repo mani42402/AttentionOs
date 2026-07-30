@@ -12,6 +12,7 @@ import com.attentionos.data.repository.UserAction
 import com.attentionos.data.settings.AppSettings
 import com.attentionos.training.ExportResult
 import com.attentionos.training.PersonalizedModelProgress
+import com.attentionos.ui.theme.ThemeMode
 import java.time.LocalDate
 import java.time.ZoneId
 import kotlin.math.roundToInt
@@ -237,8 +238,12 @@ class MainViewModel(private val container: AppContainer) : ViewModel() {
         viewModelScope.launch { container.settingsRepository.setReviewReminderTimes(times) }
     }
 
-    fun setDarkTheme(enabled: Boolean) {
-        viewModelScope.launch { container.settingsRepository.setDarkTheme(enabled) }
+    fun setThemeMode(mode: ThemeMode) {
+        viewModelScope.launch { container.settingsRepository.setThemeMode(mode.name) }
+    }
+
+    fun setDynamicColor(enabled: Boolean) {
+        viewModelScope.launch { container.settingsRepository.setDynamicColor(enabled) }
     }
 
     fun setMotionEnabled(enabled: Boolean) {

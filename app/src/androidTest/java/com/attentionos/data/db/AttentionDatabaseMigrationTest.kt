@@ -154,6 +154,41 @@ class AttentionDatabaseMigrationTest {
         migrated.close()
     }
 
+    @Test
+    fun migrationEightToNineDefaultsCalibrationToIdentity() {
+        // A model fitted before calibration existed must keep behaving exactly as it did, so
+        // the defaults have to be the identity transform rather than zero.
+        helper.createDatabase(TEST_DB, 8).apply {
+            execSQL(
+                """
+                INSERT INTO personalized_model
+                    (id, weights, bias, positiveCount, negativeCount, updatedAt, version,
+                     evaluationCount, personalCorrectCount, baselineCorrectCount,
+                     importantEvaluationCount, importantCorrectCount,
+                     notImportantEvaluationCount, falseImportantCount)
+                VALUES (1, X'0102030405060708', 0.5, 12, 9, 1000, 3, 40, 30, 28, 10, 9, 8, 1)
+                """.trimIndent(),
+            )
+            close()
+        }
+
+        val migrated = helper.runMigrationsAndValidate(
+            TEST_DB,
+            9,
+            true,
+            AttentionDatabase.MIGRATION_8_9,
+        )
+        migrated.query(
+            "SELECT calibrationSlope, calibrationIntercept, positiveCount FROM personalized_model",
+        ).use {
+            assertTrue("the learned model must survive", it.moveToFirst())
+            assertEquals(1f, it.getFloat(0), 0.0001f)
+            assertEquals(0f, it.getFloat(1), 0.0001f)
+            assertEquals(12, it.getInt(2))
+        }
+        migrated.close()
+    }
+
     private companion object {
         const val TEST_DB = "migration-test.db"
 
@@ -165,6 +200,7 @@ class AttentionDatabaseMigrationTest {
             AttentionDatabase.MIGRATION_5_6,
             AttentionDatabase.MIGRATION_6_7,
             AttentionDatabase.MIGRATION_7_8,
+            AttentionDatabase.MIGRATION_8_9,
         )
 
         val EXPECTED_V6_INDEXES = listOf(
