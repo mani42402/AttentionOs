@@ -138,6 +138,19 @@ land only on notifications no rule and no engagement history had an opinion abou
 
 Stages 1, 3 and 4 do not exist yet; the plan document tracks what does.
 
+### Learning does not depend on the user visiting the app
+
+Most people will never review anything, so the primary signal is passive: which notifications get
+opened, which get dealt with inside the sending app, which get one deliberate swipe, which simply time
+out, how long each sat there, and — the strongest and currently unused one — **which notification a
+user opens first when several are waiting**, since that is a direct statement of ranking.
+
+Android hands the listener a `RankingMap` on every callback that the app currently ignores. It carries
+the channel and its effective importance, which means an app whose channel the user has already turned
+down in Android settings is the user stating a preference we can simply honour.
+
+Review and explicit corrections accelerate this; nothing requires them.
+
 ### The invariant, restated
 
 The listener carried an absolute promise not to modify any source notification. Mute, snooze and
