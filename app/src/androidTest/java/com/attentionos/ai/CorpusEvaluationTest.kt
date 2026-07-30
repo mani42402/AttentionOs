@@ -39,9 +39,9 @@ class CorpusEvaluationTest {
         val hint: String?,
     )
 
-    private fun corpus(): List<Case> {
+    private fun corpus(asset: String = CORPUS_ASSET): List<Case> {
         val json = InstrumentationRegistry.getInstrumentation().context.assets
-            .open(CORPUS_ASSET)
+            .open(asset)
             .bufferedReader()
             .use { it.readText() }
         val array = JSONArray(json)
@@ -60,6 +60,12 @@ class CorpusEvaluationTest {
         }
     }
 
+    /**
+     * The corpus the descriptions were written against.
+     *
+     * Useful as a regression guard and nothing more: the same person wrote both, so a good score
+     * here is partly a measure of self-consistency. [scoreHeldOutCorpus] is the honest one.
+     */
     @Test
     fun scoreTheWholeCorpus() {
         val analyzer = StaticEmbeddingAnalyzer(context)
@@ -166,8 +172,126 @@ class CorpusEvaluationTest {
         )
     }
 
+    /**
+     * The honest test: 135 notifications whose scenarios the descriptions never mention.
+     *
+     * Written under three rules. No scenario named in `AttentionDescriptions` — no hospital, rent,
+     * school or OTP wording reused. Informal register throughout: "u free tn?", "where r u?? been
+     * waiting 20 mins", missing vowels, ALL CAPS, emoji. And real notification formats — "+18 new
+     * messages", "Now playing", "Screenshot saved" — rather than tidy sentences.
+     *
+     * 35 scenario kinds none of the descriptions name: gas leak, fire alarm, a death in the
+     * family, an urgent blood request, exam results, a job interview, a visa appointment, a pet
+     * out of surgery, a towed car, a power cut, a delayed salary, an approved loan, an insurance
+     * claim, a 2FA push, a ride that has arrived, a meeting starting now, a shared document, a
+     * code review, a monitoring page, a crypto move, a cricket score, now playing, a screenshot,
+     * a low battery, a birthday, traffic, and a building notice — across 17 languages.
+     *
+     * The point is to find out whether the descriptions generalise or whether they only match the
+     * hand that wrote them. Nothing here was used to tune a description, and the recorded baseline
+     * is whatever the first run produced.
+     */
+    @Test
+    fun scoreHeldOutCorpus() {
+        val analyzer = StaticEmbeddingAnalyzer(context)
+        analyzer.warmUp()
+        val engine = PriorityEngine(analyzer)
+        val cases = corpus(HELD_OUT_ASSET)
+        assertTrue("held-out corpus did not load", cases.size >= 120)
+
+        var reached = 0
+        var must = 0
+        var quietRight = 0
+        var quiet = 0
+        val missed = mutableListOf<String>()
+        val overAlerted = mutableListOf<String>()
+        val byLang = linkedMapOf<String, IntArray>()
+
+        for (case in cases) {
+            val decision = engine.decide(
+                signal = NotificationSignal(
+                    packageName = case.pkg,
+                    title = case.title,
+                    text = case.body,
+                    postedAt = System.currentTimeMillis(),
+                    isConversation = case.conversation,
+                    isOngoing = false,
+                    categoryHint = case.hint,
+                ),
+                context = AttentionContext(focusModeEnabled = true, hourOfDay = 14),
+                memory = null,
+            )
+            val prominent = decision.priority.ordinal <= AttentionPriority.HIGH.ordinal
+            // [reached, must, quietRight, quiet]
+            val row = byLang.getOrPut(case.lang) { IntArray(4) }
+            if (case.mustReach) {
+                must++; row[1]++
+                if (prominent) { reached++; row[0]++ } else {
+                    missed += "${case.lang}/${case.kind}: \"${case.body.take(38)}\" -> ${decision.priority}"
+                }
+            } else {
+                quiet++; row[3]++
+                if (!prominent) { quietRight++; row[2]++ } else {
+                    overAlerted += "${case.lang}/${case.kind}: \"${case.body.take(38)}\" -> ${decision.priority}"
+                }
+            }
+        }
+
+        val report = StringBuilder("\n=== HELD OUT: scenarios the descriptions never mention ").append("\n")
+        byLang.entries
+            .sortedBy { -(if (it.value[1] == 0) 0.0 else it.value[0].toDouble() / it.value[1]) }
+            .forEach { (lang, r) ->
+                report.append(
+                    "  %-12s must-reach %2d/%-2d (%3.0f%%)   quiet %2d/%-2d\n".format(
+                        lang, r[0], r[1],
+                        if (r[1] == 0) 0.0 else r[0] * 100.0 / r[1], r[2], r[3],
+                    ),
+                )
+            }
+        report.append(
+            "\n  TOTAL must-reach $reached/$must (${"%.0f".format(reached * 100.0 / must)}%)" +
+                "   quiet-right $quietRight/$quiet (${"%.0f".format(quietRight * 100.0 / quiet)}%)",
+        )
+        Log.i(TAG, report.toString())
+        Log.i(TAG, "\nMISSED (would have mattered):\n  " + missed.joinToString("\n  "))
+        Log.i(TAG, "\nOVER-ALERTED (noise promoted):\n  " + overAlerted.joinToString("\n  "))
+
+        assertTrue(
+            "held-out recall fell below the recorded baseline: $reached/$must",
+            reached >= HELD_OUT_RECALL_BASELINE,
+        )
+        assertTrue(
+            "held-out noise rejection fell below the recorded baseline: $quietRight/$quiet",
+            quietRight >= HELD_OUT_QUIET_BASELINE,
+        )
+    }
+
     private companion object {
         const val TAG = "AttentionCorpus"
+        const val HELD_OUT_ASSET = "holdout-corpus.json"
+
+        /**
+         * First-run figures, never tuned against: 41/85 recall, 34/50 noise rejection.
+         *
+         * The comparison that matters, measured by reverting the decision logic and re-running
+         * this same file:
+         *
+         * ```
+         *                        own corpus        held out
+         *   weighted sum        71/120  59%      34/85  40%   quiet 40/50  80%
+         *   descriptions       110/120  92%      41/85  48%   quiet 34/50  68%
+         * ```
+         *
+         * The 92% was largely self-consistency — the same hand wrote the descriptions and that
+         * corpus. On scenarios nobody wrote a description for, the gain is 8 points of recall
+         * bought with 12 points of noise. That is close to a wash, and it falsifies the claim
+         * that ~50 sentences bound the space: this set alone needed a death in the family, an
+         * urgent blood request, a visa appointment, a meeting starting now, a ride that has
+         * arrived, and an entire informal register ("where r u?? been waiting 20 mins") that
+         * none of them cover.
+         */
+        const val HELD_OUT_RECALL_BASELINE = 41
+        const val HELD_OUT_QUIET_BASELINE = 34
         const val CORPUS_ASSET = "notification-corpus.json"
 
         /**

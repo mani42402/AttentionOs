@@ -224,6 +224,63 @@ bands.
 `partner_now` at 67% and `boss_urgent` at 73% are the weakest real kinds. Both are short messages
 whose urgency is contextual — "come down now" means something only if you agreed to meet.
 
+## Held-out test: the descriptions do not generalise
+
+`CorpusEvaluationTest.scoreHeldOutCorpus` runs 135 notifications across 17 languages whose
+scenarios **no description mentions** — a death in the family, an urgent blood request, a gas leak,
+a visa appointment, a job interview, a towed car, a power cut, a delayed salary, an approved loan,
+an insurance claim, a 2FA push, a ride that has arrived, a meeting starting in ten minutes, a
+shared document, a code review, a monitoring page, a crypto move, a cricket score, a low battery, a
+birthday, traffic — plus an informal register the tidy descriptions never use: "u free tn?",
+"where r u?? been waiting 20 mins outside", "abu ki tabiyat kharb hai jaldi ghr aao".
+
+Both architectures were scored on it by reverting the decision logic and re-running the same file:
+
+```
+                     own corpus            held out
+weighted sum        71/120  59%      34/85  40%   quiet 40/50  80%
+descriptions       110/120  92%      41/85  48%   quiet 34/50  68%
+```
+
+**The 92% was mostly self-consistency.** The same hand wrote the descriptions and that corpus. On
+scenarios nobody wrote a description for, the descriptions buy 8 points of recall and give back 12
+points of noise rejection. That is close to a wash.
+
+### What this falsifies
+
+The claim that ~50 sentences bound the space of reasons a notification matters. This one held-out
+set alone needed:
+
+- a death in the family — matched only WORTH_KNOWING, so `janaza aaj asar ke baad` reads as chat
+- an urgent blood request — LOW
+- a visa or official appointment — LOW
+- a meeting starting in ten minutes — LOW
+- a ride that has arrived — MEDIUM
+- an informal message from someone waiting — `where r u?? been waiting 20 mins outside` → **SILENT**
+
+And it over-promotes in the other direction, because a sentence written to catch one thing catches
+its neighbours: a cricket score reached CRITICAL in Hindi, a building notice about the water supply
+reached CRITICAL in English, an approved car loan and a code review both reached HIGH.
+
+That last group is the more instructive failure. Adding descriptions for the misses would very
+likely promote more of the noise, because the mechanism has no notion of *how confident* it is —
+only which sentence is nearest. Every new description is a new opportunity for something unrelated
+to land beside it.
+
+### What it means
+
+The honest reading is that neither architecture works well enough on notifications it has not seen.
+Nearest-description matching is principled, debuggable and cheap, and it is still only 48%.
+
+This is the evidence for a model that can be *instructed* rather than *matched* — the case for
+`multilingual-e5-small` at ~145 MB, or a small generative model, sitting behind the cheap encoder
+as a second stage for the notifications the first stage is unsure about. That cascade is now worth
+building rather than speculating about, and the seam for it already exists: `LanguageAnalyzer` is an
+interface and `EncoderAsset` is injectable.
+
+What should not happen is more descriptions. The held-out number is the one to move, and adding
+sentences tuned against the set they were written for is how the 92% happened in the first place.
+
 ## Ruled out
 
 Researched July 2026; revisit only if the underlying facts change.
