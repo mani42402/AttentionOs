@@ -80,8 +80,8 @@ By default the app stores:
 
 ## Performance model
 
-The notification language path uses `potion-base-8M`, an INT8-quantized static token-embedding
-table distilled from `bge-base-en-v1.5`. A sentence embedding is the mean of its token vectors,
+The notification language path uses `static-similarity-mrl-multilingual-v1`, an INT8-quantized
+static token-embedding table truncated to 128 dimensions. A sentence embedding is the mean of its token vectors,
 normalized — a few thousand additions, with no inference runtime and nothing to warm up beyond
 mapping the table out of the APK. A deterministic analyzer remains as a fail-safe if the table
 ever fails to load.
@@ -91,7 +91,7 @@ found no quality loss on notification text while removing 20 MB from the downloa
 the install. See `docs/MODEL_STRATEGY.md` for the scorecards and the limitation this accepts.
 
 The token vectors stay frozen. Each explicit **Important** or **Not important** correction performs
-one online update to a 326-feature logistic classifier using the embedding plus time, focus mode,
+one online update to a 198-feature logistic classifier using the embedding plus time, focus mode,
 sender history, and the safe engine's base score. Its Float32 weights occupy about 1.6 KB. The
 personal model remains inactive for a seven-day shadow pilot and until it has at least 50 explicit
 corrections with at least 10 in both classes. It must also reach 65% shadow accuracy, 80%

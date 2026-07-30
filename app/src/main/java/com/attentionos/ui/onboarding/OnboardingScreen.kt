@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -29,6 +30,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
@@ -666,13 +668,23 @@ private fun PreferenceToggle(
     onChanged: (Boolean) -> Unit,
 ) {
     val haptics = rememberHaptics()
+    // `toggleable` on the row, not just the Switch. Declaring `toggleableState` without it
+    // announced a checkable element that had no activation action, and left the label dead to
+    // touch — the only target was the switch itself. The Settings rows already did this; these
+    // did not, and the difference is invisible until someone taps the words.
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = Spacing.md)
-            .semantics(mergeDescendants = true) {
-                toggleableState = ToggleableState(checked)
-            },
+            .toggleable(
+                value = checked,
+                role = Role.Switch,
+                onValueChange = {
+                    haptics.select()
+                    onChanged(it)
+                },
+            )
+            .defaultMinSize(minHeight = Spacing.giant)
+            .padding(vertical = Spacing.md),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(Spacing.md),
     ) {
@@ -686,10 +698,8 @@ private fun PreferenceToggle(
         }
         Switch(
             checked = checked,
-            onCheckedChange = {
-                haptics.select()
-                onChanged(it)
-            },
+            // Null: the row owns the gesture, and a nested handler would fight it.
+            onCheckedChange = null,
             colors = SwitchDefaults.colors(
                 checkedThumbColor = SignalColors.Ink,
                 checkedTrackColor = SignalColors.Mint,

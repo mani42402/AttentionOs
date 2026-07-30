@@ -1,0 +1,2252 @@
+[
+ {
+  "lang": "english",
+  "kind": "family_emergency",
+  "pkg": "com.whatsapp",
+  "title": "Ammi",
+  "body": "Dad collapsed, we are taking him to hospital, call me",
+  "mustReach": true,
+  "conversation": true,
+  "hint": null
+ },
+ {
+  "lang": "english",
+  "kind": "partner_now",
+  "pkg": "com.whatsapp",
+  "title": "Ayesha",
+  "body": "I am waiting outside your office, come down now",
+  "mustReach": true,
+  "conversation": true,
+  "hint": null
+ },
+ {
+  "lang": "english",
+  "kind": "family_routine",
+  "pkg": "com.whatsapp",
+  "title": "Mum",
+  "body": "Are you coming home for dinner tonight?",
+  "mustReach": false,
+  "conversation": true,
+  "hint": null
+ },
+ {
+  "lang": "english",
+  "kind": "friend_plans",
+  "pkg": "com.whatsapp",
+  "title": "Bilal",
+  "body": "Free on Sunday? Thinking of going out",
+  "mustReach": false,
+  "conversation": true,
+  "hint": null
+ },
+ {
+  "lang": "english",
+  "kind": "boss_urgent",
+  "pkg": "com.slack",
+  "title": "Rahul (Manager)",
+  "body": "Client demo broke, can you check right now",
+  "mustReach": true,
+  "conversation": true,
+  "hint": null
+ },
+ {
+  "lang": "english",
+  "kind": "work_routine",
+  "pkg": "com.slack",
+  "title": "Slack",
+  "body": "Notes from this morning's standup are posted",
+  "mustReach": false,
+  "conversation": false,
+  "hint": null
+ },
+ {
+  "lang": "english",
+  "kind": "bank_otp",
+  "pkg": "com.bank.app",
+  "title": "HBL",
+  "body": "123456 is your one time password, do not share",
+  "mustReach": true,
+  "conversation": false,
+  "hint": null
+ },
+ {
+  "lang": "english",
+  "kind": "bank_fraud",
+  "pkg": "com.bank.app",
+  "title": "HBL",
+  "body": "A transaction of 45,000 was attempted on your card",
+  "mustReach": true,
+  "conversation": false,
+  "hint": null
+ },
+ {
+  "lang": "english",
+  "kind": "school_child",
+  "pkg": "com.school.app",
+  "title": "City School",
+  "body": "Aarav was marked absent today, please confirm",
+  "mustReach": true,
+  "conversation": false,
+  "hint": null
+ },
+ {
+  "lang": "english",
+  "kind": "landlord_rent",
+  "pkg": "com.gmail",
+  "title": "Landlord",
+  "body": "Rent is overdue, please transfer today",
+  "mustReach": true,
+  "conversation": false,
+  "hint": null
+ },
+ {
+  "lang": "english",
+  "kind": "missed_call",
+  "pkg": "com.android.dialer",
+  "title": "Missed call",
+  "body": "Ammi, 2 missed calls",
+  "mustReach": true,
+  "conversation": false,
+  "hint": "call"
+ },
+ {
+  "lang": "english",
+  "kind": "delivery",
+  "pkg": "com.delivery",
+  "title": "Foodpanda",
+  "body": "Your order is 5 minutes away",
+  "mustReach": false,
+  "conversation": false,
+  "hint": null
+ },
+ {
+  "lang": "english",
+  "kind": "promo_sale",
+  "pkg": "com.shop.app",
+  "title": "Daraz",
+  "body": "Flat 70% off, ends tonight, shop now",
+  "mustReach": false,
+  "conversation": false,
+  "hint": null
+ },
+ {
+  "lang": "english",
+  "kind": "social_like",
+  "pkg": "com.instagram.android",
+  "title": "Instagram",
+  "body": "rohan_92 liked your photo",
+  "mustReach": false,
+  "conversation": false,
+  "hint": null
+ },
+ {
+  "lang": "english",
+  "kind": "game_spam",
+  "pkg": "com.game.candy",
+  "title": "Candy Blast",
+  "body": "Your lives are full, come back and play",
+  "mustReach": false,
+  "conversation": false,
+  "hint": null
+ },
+ {
+  "lang": "roman_urdu",
+  "kind": "family_emergency",
+  "pkg": "com.whatsapp",
+  "title": "Ammi",
+  "body": "Abu ko hospital le kar ja rahe hain, jaldi phone karo",
+  "mustReach": true,
+  "conversation": true,
+  "hint": null
+ },
+ {
+  "lang": "roman_urdu",
+  "kind": "partner_now",
+  "pkg": "com.whatsapp",
+  "title": "Ayesha",
+  "body": "Mein tumhare office ke bahar hun, neeche aa jao",
+  "mustReach": true,
+  "conversation": true,
+  "hint": null
+ },
+ {
+  "lang": "roman_urdu",
+  "kind": "family_routine",
+  "pkg": "com.whatsapp",
+  "title": "Ammi",
+  "body": "Ap kese ho, kha ho abhi ao, khana taiyar hai",
+  "mustReach": false,
+  "conversation": true,
+  "hint": null
+ },
+ {
+  "lang": "roman_urdu",
+  "kind": "friend_plans",
+  "pkg": "com.whatsapp",
+  "title": "Bilal",
+  "body": "Sunday free ho? Bahar chalne ka plan hai",
+  "mustReach": false,
+  "conversation": true,
+  "hint": null
+ },
+ {
+  "lang": "roman_urdu",
+  "kind": "boss_urgent",
+  "pkg": "com.slack",
+  "title": "Rahul",
+  "body": "Client ka demo kharab ho gaya, abhi check karo",
+  "mustReach": true,
+  "conversation": true,
+  "hint": null
+ },
+ {
+  "lang": "roman_urdu",
+  "kind": "work_routine",
+  "pkg": "com.slack",
+  "title": "Slack",
+  "body": "Aaj ki meeting ke notes channel mein daal diye hain",
+  "mustReach": false,
+  "conversation": false,
+  "hint": null
+ },
+ {
+  "lang": "roman_urdu",
+  "kind": "bank_otp",
+  "pkg": "com.bank.app",
+  "title": "HBL",
+  "body": "123456 apka OTP hai, kisi ko na batayein",
+  "mustReach": true,
+  "conversation": false,
+  "hint": null
+ },
+ {
+  "lang": "roman_urdu",
+  "kind": "bank_fraud",
+  "pkg": "com.bank.app",
+  "title": "HBL",
+  "body": "Apke account se 45,000 rupay nikal gaye hain",
+  "mustReach": true,
+  "conversation": false,
+  "hint": null
+ },
+ {
+  "lang": "roman_urdu",
+  "kind": "school_child",
+  "pkg": "com.school.app",
+  "title": "City School",
+  "body": "Apka beta aaj school nahi aaya, tasdeeq karein",
+  "mustReach": true,
+  "conversation": false,
+  "hint": null
+ },
+ {
+  "lang": "roman_urdu",
+  "kind": "landlord_rent",
+  "pkg": "com.gmail",
+  "title": "Malik Makan",
+  "body": "Kiraya baqi hai, aaj hi bhej dein",
+  "mustReach": true,
+  "conversation": false,
+  "hint": null
+ },
+ {
+  "lang": "roman_urdu",
+  "kind": "missed_call",
+  "pkg": "com.android.dialer",
+  "title": "Missed call",
+  "body": "Ammi, 2 missed call",
+  "mustReach": true,
+  "conversation": false,
+  "hint": "call"
+ },
+ {
+  "lang": "roman_urdu",
+  "kind": "delivery",
+  "pkg": "com.delivery",
+  "title": "Foodpanda",
+  "body": "Apka order 5 minute mein pohanch jaye ga",
+  "mustReach": false,
+  "conversation": false,
+  "hint": null
+ },
+ {
+  "lang": "roman_urdu",
+  "kind": "promo_sale",
+  "pkg": "com.shop.app",
+  "title": "Daraz",
+  "body": "Aaj raat tak 70% raiyat, abhi khareedein",
+  "mustReach": false,
+  "conversation": false,
+  "hint": null
+ },
+ {
+  "lang": "roman_urdu",
+  "kind": "social_like",
+  "pkg": "com.instagram.android",
+  "title": "Instagram",
+  "body": "rohan_92 ne apki tasveer pasand ki",
+  "mustReach": false,
+  "conversation": false,
+  "hint": null
+ },
+ {
+  "lang": "roman_urdu",
+  "kind": "game_spam",
+  "pkg": "com.game.candy",
+  "title": "Candy Blast",
+  "body": "Apki lives poori ho gayi, khelne aayein",
+  "mustReach": false,
+  "conversation": false,
+  "hint": null
+ },
+ {
+  "lang": "hinglish",
+  "kind": "family_emergency",
+  "pkg": "com.whatsapp",
+  "title": "Mummy",
+  "body": "Papa ko hospital le ja rahe hain, jaldi call karo",
+  "mustReach": true,
+  "conversation": true,
+  "hint": null
+ },
+ {
+  "lang": "hinglish",
+  "kind": "partner_now",
+  "pkg": "com.whatsapp",
+  "title": "Priya",
+  "body": "Main tumhare office ke bahar hoon, neeche aao",
+  "mustReach": true,
+  "conversation": true,
+  "hint": null
+ },
+ {
+  "lang": "hinglish",
+  "kind": "family_routine",
+  "pkg": "com.whatsapp",
+  "title": "Mummy",
+  "body": "Kya kar rahe ho, khana kha liya?",
+  "mustReach": false,
+  "conversation": true,
+  "hint": null
+ },
+ {
+  "lang": "hinglish",
+  "kind": "friend_plans",
+  "pkg": "com.whatsapp",
+  "title": "Rohan",
+  "body": "Weekend pe free ho? Movie chalein",
+  "mustReach": false,
+  "conversation": true,
+  "hint": null
+ },
+ {
+  "lang": "hinglish",
+  "kind": "boss_urgent",
+  "pkg": "com.slack",
+  "title": "Manager",
+  "body": "Production down hai, abhi dekho please",
+  "mustReach": true,
+  "conversation": true,
+  "hint": null
+ },
+ {
+  "lang": "hinglish",
+  "kind": "work_routine",
+  "pkg": "com.slack",
+  "title": "Slack",
+  "body": "Standup ke notes channel mein daal diye",
+  "mustReach": false,
+  "conversation": false,
+  "hint": null
+ },
+ {
+  "lang": "hinglish",
+  "kind": "bank_otp",
+  "pkg": "com.bank.app",
+  "title": "HDFC",
+  "body": "123456 aapka OTP hai, kisi ko mat batao",
+  "mustReach": true,
+  "conversation": false,
+  "hint": null
+ },
+ {
+  "lang": "hinglish",
+  "kind": "bank_fraud",
+  "pkg": "com.bank.app",
+  "title": "HDFC",
+  "body": "Aapke account se 45,000 debit hue hain",
+  "mustReach": true,
+  "conversation": false,
+  "hint": null
+ },
+ {
+  "lang": "hinglish",
+  "kind": "school_child",
+  "pkg": "com.school.app",
+  "title": "DPS School",
+  "body": "Aapka beta aaj school nahi aaya",
+  "mustReach": true,
+  "conversation": false,
+  "hint": null
+ },
+ {
+  "lang": "hinglish",
+  "kind": "landlord_rent",
+  "pkg": "com.gmail",
+  "title": "Landlord",
+  "body": "Rent pending hai, aaj transfer kar do",
+  "mustReach": true,
+  "conversation": false,
+  "hint": null
+ },
+ {
+  "lang": "hinglish",
+  "kind": "missed_call",
+  "pkg": "com.android.dialer",
+  "title": "Missed call",
+  "body": "Mummy, 2 missed calls",
+  "mustReach": true,
+  "conversation": false,
+  "hint": "call"
+ },
+ {
+  "lang": "hinglish",
+  "kind": "delivery",
+  "pkg": "com.delivery",
+  "title": "Swiggy",
+  "body": "Aapka order 5 minute mein aa raha hai",
+  "mustReach": false,
+  "conversation": false,
+  "hint": null
+ },
+ {
+  "lang": "hinglish",
+  "kind": "promo_sale",
+  "pkg": "com.shop.app",
+  "title": "Myntra",
+  "body": "Aaj raat tak 70% off, abhi kharido",
+  "mustReach": false,
+  "conversation": false,
+  "hint": null
+ },
+ {
+  "lang": "hinglish",
+  "kind": "social_like",
+  "pkg": "com.instagram.android",
+  "title": "Instagram",
+  "body": "rohan_92 ne aapki photo like ki",
+  "mustReach": false,
+  "conversation": false,
+  "hint": null
+ },
+ {
+  "lang": "hinglish",
+  "kind": "game_spam",
+  "pkg": "com.game.candy",
+  "title": "Candy Blast",
+  "body": "Aapki lives full hain, khelne aao",
+  "mustReach": false,
+  "conversation": false,
+  "hint": null
+ },
+ {
+  "lang": "urdu",
+  "kind": "family_emergency",
+  "pkg": "com.whatsapp",
+  "title": "امی",
+  "body": "ابو کو ہسپتال لے جا رہے ہیں، جلدی فون کرو",
+  "mustReach": true,
+  "conversation": true,
+  "hint": null
+ },
+ {
+  "lang": "urdu",
+  "kind": "partner_now",
+  "pkg": "com.whatsapp",
+  "title": "عائشہ",
+  "body": "میں تمہارے دفتر کے باہر ہوں، نیچے آ جاؤ",
+  "mustReach": true,
+  "conversation": true,
+  "hint": null
+ },
+ {
+  "lang": "urdu",
+  "kind": "family_routine",
+  "pkg": "com.whatsapp",
+  "title": "امی",
+  "body": "آپ کیسے ہو، کہاں ہو، کھانا تیار ہے",
+  "mustReach": false,
+  "conversation": true,
+  "hint": null
+ },
+ {
+  "lang": "urdu",
+  "kind": "friend_plans",
+  "pkg": "com.whatsapp",
+  "title": "بلال",
+  "body": "اتوار کو فارغ ہو؟ باہر چلنے کا ارادہ ہے",
+  "mustReach": false,
+  "conversation": true,
+  "hint": null
+ },
+ {
+  "lang": "urdu",
+  "kind": "boss_urgent",
+  "pkg": "com.slack",
+  "title": "منیجر",
+  "body": "کلائنٹ کا ڈیمو خراب ہو گیا، ابھی دیکھیں",
+  "mustReach": true,
+  "conversation": true,
+  "hint": null
+ },
+ {
+  "lang": "urdu",
+  "kind": "work_routine",
+  "pkg": "com.slack",
+  "title": "سلیک",
+  "body": "آج کی میٹنگ کے نوٹس چینل میں ہیں",
+  "mustReach": false,
+  "conversation": false,
+  "hint": null
+ },
+ {
+  "lang": "urdu",
+  "kind": "bank_otp",
+  "pkg": "com.bank.app",
+  "title": "ایچ بی ایل",
+  "body": "123456 آپ کا او ٹی پی ہے، کسی کو نہ بتائیں",
+  "mustReach": true,
+  "conversation": false,
+  "hint": null
+ },
+ {
+  "lang": "urdu",
+  "kind": "bank_fraud",
+  "pkg": "com.bank.app",
+  "title": "ایچ بی ایل",
+  "body": "آپ کے اکاؤنٹ سے 45,000 روپے نکالے گئے",
+  "mustReach": true,
+  "conversation": false,
+  "hint": null
+ },
+ {
+  "lang": "urdu",
+  "kind": "school_child",
+  "pkg": "com.school.app",
+  "title": "سٹی سکول",
+  "body": "آپ کا بیٹا آج سکول نہیں آیا",
+  "mustReach": true,
+  "conversation": false,
+  "hint": null
+ },
+ {
+  "lang": "urdu",
+  "kind": "landlord_rent",
+  "pkg": "com.gmail",
+  "title": "مالک مکان",
+  "body": "کرایہ باقی ہے، آج ہی بھیج دیں",
+  "mustReach": true,
+  "conversation": false,
+  "hint": null
+ },
+ {
+  "lang": "urdu",
+  "kind": "missed_call",
+  "pkg": "com.android.dialer",
+  "title": "مسڈ کال",
+  "body": "امی، 2 مسڈ کالز",
+  "mustReach": true,
+  "conversation": false,
+  "hint": "call"
+ },
+ {
+  "lang": "urdu",
+  "kind": "delivery",
+  "pkg": "com.delivery",
+  "title": "فوڈ پانڈا",
+  "body": "آپ کا آرڈر 5 منٹ میں پہنچ جائے گا",
+  "mustReach": false,
+  "conversation": false,
+  "hint": null
+ },
+ {
+  "lang": "urdu",
+  "kind": "promo_sale",
+  "pkg": "com.shop.app",
+  "title": "دراز",
+  "body": "آج رات تک 70% رعایت، ابھی خریدیں",
+  "mustReach": false,
+  "conversation": false,
+  "hint": null
+ },
+ {
+  "lang": "urdu",
+  "kind": "social_like",
+  "pkg": "com.instagram.android",
+  "title": "انسٹاگرام",
+  "body": "روحان نے آپ کی تصویر پسند کی",
+  "mustReach": false,
+  "conversation": false,
+  "hint": null
+ },
+ {
+  "lang": "urdu",
+  "kind": "game_spam",
+  "pkg": "com.game.candy",
+  "title": "کینڈی بلاسٹ",
+  "body": "آپ کی لائیوز پوری ہو گئیں، کھیلنے آئیں",
+  "mustReach": false,
+  "conversation": false,
+  "hint": null
+ },
+ {
+  "lang": "hindi",
+  "kind": "family_emergency",
+  "pkg": "com.whatsapp",
+  "title": "मम्मी",
+  "body": "पापा को अस्पताल ले जा रहे हैं, तुरंत फ़ोन करो",
+  "mustReach": true,
+  "conversation": true,
+  "hint": null
+ },
+ {
+  "lang": "hindi",
+  "kind": "partner_now",
+  "pkg": "com.whatsapp",
+  "title": "प्रिया",
+  "body": "मैं तुम्हारे ऑफिस के बाहर हूँ, नीचे आ जाओ",
+  "mustReach": true,
+  "conversation": true,
+  "hint": null
+ },
+ {
+  "lang": "hindi",
+  "kind": "family_routine",
+  "pkg": "com.whatsapp",
+  "title": "मम्मी",
+  "body": "क्या कर रहे हो, खाना खा लिया?",
+  "mustReach": false,
+  "conversation": true,
+  "hint": null
+ },
+ {
+  "lang": "hindi",
+  "kind": "friend_plans",
+  "pkg": "com.whatsapp",
+  "title": "रोहन",
+  "body": "वीकेंड पर फ़्री हो? फ़िल्म देखने चलें",
+  "mustReach": false,
+  "conversation": true,
+  "hint": null
+ },
+ {
+  "lang": "hindi",
+  "kind": "boss_urgent",
+  "pkg": "com.slack",
+  "title": "मैनेजर",
+  "body": "प्रोडक्शन बंद है, अभी देख लो",
+  "mustReach": true,
+  "conversation": true,
+  "hint": null
+ },
+ {
+  "lang": "hindi",
+  "kind": "work_routine",
+  "pkg": "com.slack",
+  "title": "स्लैक",
+  "body": "आज की मीटिंग के नोट्स चैनल में हैं",
+  "mustReach": false,
+  "conversation": false,
+  "hint": null
+ },
+ {
+  "lang": "hindi",
+  "kind": "bank_otp",
+  "pkg": "com.bank.app",
+  "title": "एचडीएफसी",
+  "body": "123456 आपका ओटीपी है, किसी को न बताएं",
+  "mustReach": true,
+  "conversation": false,
+  "hint": null
+ },
+ {
+  "lang": "hindi",
+  "kind": "bank_fraud",
+  "pkg": "com.bank.app",
+  "title": "एचडीएफसी",
+  "body": "आपके खाते से 45,000 रुपये निकाले गए",
+  "mustReach": true,
+  "conversation": false,
+  "hint": null
+ },
+ {
+  "lang": "hindi",
+  "kind": "school_child",
+  "pkg": "com.school.app",
+  "title": "डीपीएस स्कूल",
+  "body": "आपका बेटा आज स्कूल नहीं आया",
+  "mustReach": true,
+  "conversation": false,
+  "hint": null
+ },
+ {
+  "lang": "hindi",
+  "kind": "landlord_rent",
+  "pkg": "com.gmail",
+  "title": "मकान मालिक",
+  "body": "किराया बाकी है, आज ही भेज दीजिए",
+  "mustReach": true,
+  "conversation": false,
+  "hint": null
+ },
+ {
+  "lang": "hindi",
+  "kind": "missed_call",
+  "pkg": "com.android.dialer",
+  "title": "छूटी कॉल",
+  "body": "मम्मी, 2 मिस्ड कॉल",
+  "mustReach": true,
+  "conversation": false,
+  "hint": "call"
+ },
+ {
+  "lang": "hindi",
+  "kind": "delivery",
+  "pkg": "com.delivery",
+  "title": "स्विगी",
+  "body": "आपका ऑर्डर 5 मिनट में पहुँच जाएगा",
+  "mustReach": false,
+  "conversation": false,
+  "hint": null
+ },
+ {
+  "lang": "hindi",
+  "kind": "promo_sale",
+  "pkg": "com.shop.app",
+  "title": "मिंत्रा",
+  "body": "आज रात तक 70% छूट, अभी खरीदें",
+  "mustReach": false,
+  "conversation": false,
+  "hint": null
+ },
+ {
+  "lang": "hindi",
+  "kind": "social_like",
+  "pkg": "com.instagram.android",
+  "title": "इंस्टाग्राम",
+  "body": "रोहन ने आपकी फ़ोटो पसंद की",
+  "mustReach": false,
+  "conversation": false,
+  "hint": null
+ },
+ {
+  "lang": "hindi",
+  "kind": "game_spam",
+  "pkg": "com.game.candy",
+  "title": "कैंडी ब्लास्ट",
+  "body": "आपकी लाइफ़ पूरी हो गई, खेलने आइए",
+  "mustReach": false,
+  "conversation": false,
+  "hint": null
+ },
+ {
+  "lang": "arabic",
+  "kind": "family_emergency",
+  "pkg": "com.whatsapp",
+  "title": "أمي",
+  "body": "أخذنا أبي إلى المستشفى، اتصل بي فوراً",
+  "mustReach": true,
+  "conversation": true,
+  "hint": null
+ },
+ {
+  "lang": "arabic",
+  "kind": "partner_now",
+  "pkg": "com.whatsapp",
+  "title": "سارة",
+  "body": "أنا في انتظارك أمام المكتب، انزل الآن",
+  "mustReach": true,
+  "conversation": true,
+  "hint": null
+ },
+ {
+  "lang": "arabic",
+  "kind": "family_routine",
+  "pkg": "com.whatsapp",
+  "title": "أمي",
+  "body": "كيف حالك؟ هل ستأتي للعشاء الليلة؟",
+  "mustReach": false,
+  "conversation": true,
+  "hint": null
+ },
+ {
+  "lang": "arabic",
+  "kind": "friend_plans",
+  "pkg": "com.whatsapp",
+  "title": "خالد",
+  "body": "هل أنت متفرغ يوم الأحد؟ لنخرج",
+  "mustReach": false,
+  "conversation": true,
+  "hint": null
+ },
+ {
+  "lang": "arabic",
+  "kind": "boss_urgent",
+  "pkg": "com.slack",
+  "title": "المدير",
+  "body": "العرض التجريبي متوقف، تحقق الآن",
+  "mustReach": true,
+  "conversation": true,
+  "hint": null
+ },
+ {
+  "lang": "arabic",
+  "kind": "work_routine",
+  "pkg": "com.slack",
+  "title": "سلاك",
+  "body": "ملاحظات اجتماع الصباح في القناة",
+  "mustReach": false,
+  "conversation": false,
+  "hint": null
+ },
+ {
+  "lang": "arabic",
+  "kind": "bank_otp",
+  "pkg": "com.bank.app",
+  "title": "البنك",
+  "body": "123456 هو رمز التحقق، لا تشاركه مع أحد",
+  "mustReach": true,
+  "conversation": false,
+  "hint": null
+ },
+ {
+  "lang": "arabic",
+  "kind": "bank_fraud",
+  "pkg": "com.bank.app",
+  "title": "البنك",
+  "body": "تمت محاولة سحب 45,000 من حسابك",
+  "mustReach": true,
+  "conversation": false,
+  "hint": null
+ },
+ {
+  "lang": "arabic",
+  "kind": "school_child",
+  "pkg": "com.school.app",
+  "title": "المدرسة",
+  "body": "ابنك لم يحضر إلى المدرسة اليوم",
+  "mustReach": true,
+  "conversation": false,
+  "hint": null
+ },
+ {
+  "lang": "arabic",
+  "kind": "landlord_rent",
+  "pkg": "com.gmail",
+  "title": "المالك",
+  "body": "الإيجار متأخر، أرجو التحويل اليوم",
+  "mustReach": true,
+  "conversation": false,
+  "hint": null
+ },
+ {
+  "lang": "arabic",
+  "kind": "missed_call",
+  "pkg": "com.android.dialer",
+  "title": "مكالمة فائتة",
+  "body": "أمي، مكالمتان فائتتان",
+  "mustReach": true,
+  "conversation": false,
+  "hint": "call"
+ },
+ {
+  "lang": "arabic",
+  "kind": "delivery",
+  "pkg": "com.delivery",
+  "title": "توصيل",
+  "body": "طلبك سيصل بعد خمس دقائق",
+  "mustReach": false,
+  "conversation": false,
+  "hint": null
+ },
+ {
+  "lang": "arabic",
+  "kind": "promo_sale",
+  "pkg": "com.shop.app",
+  "title": "سوق",
+  "body": "خصم 70% ينتهي الليلة، اشترِ الآن",
+  "mustReach": false,
+  "conversation": false,
+  "hint": null
+ },
+ {
+  "lang": "arabic",
+  "kind": "social_like",
+  "pkg": "com.instagram.android",
+  "title": "إنستغرام",
+  "body": "أعجب شخص بصورتك",
+  "mustReach": false,
+  "conversation": false,
+  "hint": null
+ },
+ {
+  "lang": "arabic",
+  "kind": "game_spam",
+  "pkg": "com.game.candy",
+  "title": "لعبة",
+  "body": "أرواحك ممتلئة، تعال والعب",
+  "mustReach": false,
+  "conversation": false,
+  "hint": null
+ },
+ {
+  "lang": "chinese",
+  "kind": "family_emergency",
+  "pkg": "com.whatsapp",
+  "title": "妈妈",
+  "body": "爸爸送医院了，马上给我打电话",
+  "mustReach": true,
+  "conversation": true,
+  "hint": null
+ },
+ {
+  "lang": "chinese",
+  "kind": "partner_now",
+  "pkg": "com.whatsapp",
+  "title": "小雨",
+  "body": "我在你公司楼下等你，快下来",
+  "mustReach": true,
+  "conversation": true,
+  "hint": null
+ },
+ {
+  "lang": "chinese",
+  "kind": "family_routine",
+  "pkg": "com.whatsapp",
+  "title": "妈妈",
+  "body": "今晚回家吃饭吗？",
+  "mustReach": false,
+  "conversation": true,
+  "hint": null
+ },
+ {
+  "lang": "chinese",
+  "kind": "friend_plans",
+  "pkg": "com.whatsapp",
+  "title": "小李",
+  "body": "周日有空吗？出去玩吧",
+  "mustReach": false,
+  "conversation": true,
+  "hint": null
+ },
+ {
+  "lang": "chinese",
+  "kind": "boss_urgent",
+  "pkg": "com.slack",
+  "title": "经理",
+  "body": "客户演示出问题了，现在看一下",
+  "mustReach": true,
+  "conversation": true,
+  "hint": null
+ },
+ {
+  "lang": "chinese",
+  "kind": "work_routine",
+  "pkg": "com.slack",
+  "title": "Slack",
+  "body": "今早会议记录已经发在群里",
+  "mustReach": false,
+  "conversation": false,
+  "hint": null
+ },
+ {
+  "lang": "chinese",
+  "kind": "bank_otp",
+  "pkg": "com.bank.app",
+  "title": "银行",
+  "body": "您的验证码是123456，请勿告诉他人",
+  "mustReach": true,
+  "conversation": false,
+  "hint": null
+ },
+ {
+  "lang": "chinese",
+  "kind": "bank_fraud",
+  "pkg": "com.bank.app",
+  "title": "银行",
+  "body": "您的账户有一笔45,000元的可疑支出",
+  "mustReach": true,
+  "conversation": false,
+  "hint": null
+ },
+ {
+  "lang": "chinese",
+  "kind": "school_child",
+  "pkg": "com.school.app",
+  "title": "学校",
+  "body": "您的孩子今天没有到校",
+  "mustReach": true,
+  "conversation": false,
+  "hint": null
+ },
+ {
+  "lang": "chinese",
+  "kind": "landlord_rent",
+  "pkg": "com.gmail",
+  "title": "房东",
+  "body": "房租已逾期，请今天转账",
+  "mustReach": true,
+  "conversation": false,
+  "hint": null
+ },
+ {
+  "lang": "chinese",
+  "kind": "missed_call",
+  "pkg": "com.android.dialer",
+  "title": "未接来电",
+  "body": "妈妈，2个未接来电",
+  "mustReach": true,
+  "conversation": false,
+  "hint": "call"
+ },
+ {
+  "lang": "chinese",
+  "kind": "delivery",
+  "pkg": "com.delivery",
+  "title": "美团",
+  "body": "您的订单5分钟后送达",
+  "mustReach": false,
+  "conversation": false,
+  "hint": null
+ },
+ {
+  "lang": "chinese",
+  "kind": "promo_sale",
+  "pkg": "com.shop.app",
+  "title": "淘宝",
+  "body": "今晚截止，全场7折，立即购买",
+  "mustReach": false,
+  "conversation": false,
+  "hint": null
+ },
+ {
+  "lang": "chinese",
+  "kind": "social_like",
+  "pkg": "com.instagram.android",
+  "title": "微博",
+  "body": "有人点赞了你的照片",
+  "mustReach": false,
+  "conversation": false,
+  "hint": null
+ },
+ {
+  "lang": "chinese",
+  "kind": "game_spam",
+  "pkg": "com.game.candy",
+  "title": "游戏",
+  "body": "体力已满，快来玩吧",
+  "mustReach": false,
+  "conversation": false,
+  "hint": null
+ },
+ {
+  "lang": "bengali",
+  "kind": "family_emergency",
+  "pkg": "com.whatsapp",
+  "title": "মা",
+  "body": "বাবাকে হাসপাতালে নিয়ে যাচ্ছি, এখনই ফোন করো",
+  "mustReach": true,
+  "conversation": true,
+  "hint": null
+ },
+ {
+  "lang": "bengali",
+  "kind": "partner_now",
+  "pkg": "com.whatsapp",
+  "title": "রিয়া",
+  "body": "আমি তোমার অফিসের বাইরে দাঁড়িয়ে আছি, নেমে এসো",
+  "mustReach": true,
+  "conversation": true,
+  "hint": null
+ },
+ {
+  "lang": "bengali",
+  "kind": "family_routine",
+  "pkg": "com.whatsapp",
+  "title": "মা",
+  "body": "কেমন আছো? আজ রাতে খেতে আসবে?",
+  "mustReach": false,
+  "conversation": true,
+  "hint": null
+ },
+ {
+  "lang": "bengali",
+  "kind": "friend_plans",
+  "pkg": "com.whatsapp",
+  "title": "রাহুল",
+  "body": "রবিবার ফাঁকা আছো? বেরোবো নাকি",
+  "mustReach": false,
+  "conversation": true,
+  "hint": null
+ },
+ {
+  "lang": "bengali",
+  "kind": "boss_urgent",
+  "pkg": "com.slack",
+  "title": "ম্যানেজার",
+  "body": "ক্লায়েন্টের ডেমো বন্ধ, এখনই দেখো",
+  "mustReach": true,
+  "conversation": true,
+  "hint": null
+ },
+ {
+  "lang": "bengali",
+  "kind": "work_routine",
+  "pkg": "com.slack",
+  "title": "স্ল্যাক",
+  "body": "সকালের মিটিংয়ের নোট চ্যানেলে দেওয়া হয়েছে",
+  "mustReach": false,
+  "conversation": false,
+  "hint": null
+ },
+ {
+  "lang": "bengali",
+  "kind": "bank_otp",
+  "pkg": "com.bank.app",
+  "title": "ব্যাংক",
+  "body": "১২৩৪৫৬ আপনার ওটিপি, কাউকে বলবেন না",
+  "mustReach": true,
+  "conversation": false,
+  "hint": null
+ },
+ {
+  "lang": "bengali",
+  "kind": "bank_fraud",
+  "pkg": "com.bank.app",
+  "title": "ব্যাংক",
+  "body": "আপনার অ্যাকাউন্ট থেকে ৪৫,০০০ টাকা তোলা হয়েছে",
+  "mustReach": true,
+  "conversation": false,
+  "hint": null
+ },
+ {
+  "lang": "bengali",
+  "kind": "school_child",
+  "pkg": "com.school.app",
+  "title": "স্কুল",
+  "body": "আপনার ছেলে আজ স্কুলে আসেনি",
+  "mustReach": true,
+  "conversation": false,
+  "hint": null
+ },
+ {
+  "lang": "bengali",
+  "kind": "landlord_rent",
+  "pkg": "com.gmail",
+  "title": "বাড়িওয়ালা",
+  "body": "ভাড়া বাকি আছে, আজই পাঠিয়ে দিন",
+  "mustReach": true,
+  "conversation": false,
+  "hint": null
+ },
+ {
+  "lang": "bengali",
+  "kind": "missed_call",
+  "pkg": "com.android.dialer",
+  "title": "মিসড কল",
+  "body": "মা, ২টি মিসড কল",
+  "mustReach": true,
+  "conversation": false,
+  "hint": "call"
+ },
+ {
+  "lang": "bengali",
+  "kind": "delivery",
+  "pkg": "com.delivery",
+  "title": "ডেলিভারি",
+  "body": "আপনার অর্ডার ৫ মিনিটে পৌঁছে যাবে",
+  "mustReach": false,
+  "conversation": false,
+  "hint": null
+ },
+ {
+  "lang": "bengali",
+  "kind": "promo_sale",
+  "pkg": "com.shop.app",
+  "title": "শপ",
+  "body": "আজ রাত পর্যন্ত ৭০% ছাড়, এখনই কিনুন",
+  "mustReach": false,
+  "conversation": false,
+  "hint": null
+ },
+ {
+  "lang": "bengali",
+  "kind": "social_like",
+  "pkg": "com.instagram.android",
+  "title": "ইনস্টাগ্রাম",
+  "body": "কেউ আপনার ছবি পছন্দ করেছে",
+  "mustReach": false,
+  "conversation": false,
+  "hint": null
+ },
+ {
+  "lang": "bengali",
+  "kind": "game_spam",
+  "pkg": "com.game.candy",
+  "title": "গেম",
+  "body": "আপনার লাইফ পূর্ণ, খেলতে আসুন",
+  "mustReach": false,
+  "conversation": false,
+  "hint": null
+ },
+ {
+  "lang": "spanish",
+  "kind": "family_emergency",
+  "pkg": "com.whatsapp",
+  "title": "Mamá",
+  "body": "Llevamos a papá al hospital, llámame ya",
+  "mustReach": true,
+  "conversation": true,
+  "hint": null
+ },
+ {
+  "lang": "spanish",
+  "kind": "partner_now",
+  "pkg": "com.whatsapp",
+  "title": "Ana",
+  "body": "Estoy esperándote fuera de la oficina, baja ya",
+  "mustReach": true,
+  "conversation": true,
+  "hint": null
+ },
+ {
+  "lang": "spanish",
+  "kind": "family_routine",
+  "pkg": "com.whatsapp",
+  "title": "Mamá",
+  "body": "¿Vienes a cenar esta noche?",
+  "mustReach": false,
+  "conversation": true,
+  "hint": null
+ },
+ {
+  "lang": "spanish",
+  "kind": "friend_plans",
+  "pkg": "com.whatsapp",
+  "title": "Carlos",
+  "body": "¿Libre el domingo? Podemos salir",
+  "mustReach": false,
+  "conversation": true,
+  "hint": null
+ },
+ {
+  "lang": "spanish",
+  "kind": "boss_urgent",
+  "pkg": "com.slack",
+  "title": "Jefe",
+  "body": "La demo del cliente falló, revísalo ahora",
+  "mustReach": true,
+  "conversation": true,
+  "hint": null
+ },
+ {
+  "lang": "spanish",
+  "kind": "work_routine",
+  "pkg": "com.slack",
+  "title": "Slack",
+  "body": "Las notas de la reunión están en el canal",
+  "mustReach": false,
+  "conversation": false,
+  "hint": null
+ },
+ {
+  "lang": "spanish",
+  "kind": "bank_otp",
+  "pkg": "com.bank.app",
+  "title": "BBVA",
+  "body": "123456 es tu código de verificación, no lo compartas",
+  "mustReach": true,
+  "conversation": false,
+  "hint": null
+ },
+ {
+  "lang": "spanish",
+  "kind": "bank_fraud",
+  "pkg": "com.bank.app",
+  "title": "BBVA",
+  "body": "Se intentó un cargo de 450 euros en tu tarjeta",
+  "mustReach": true,
+  "conversation": false,
+  "hint": null
+ },
+ {
+  "lang": "spanish",
+  "kind": "school_child",
+  "pkg": "com.school.app",
+  "title": "Colegio",
+  "body": "Su hijo no asistió hoy al colegio",
+  "mustReach": true,
+  "conversation": false,
+  "hint": null
+ },
+ {
+  "lang": "spanish",
+  "kind": "landlord_rent",
+  "pkg": "com.gmail",
+  "title": "Casero",
+  "body": "El alquiler está pendiente, transfiere hoy",
+  "mustReach": true,
+  "conversation": false,
+  "hint": null
+ },
+ {
+  "lang": "spanish",
+  "kind": "missed_call",
+  "pkg": "com.android.dialer",
+  "title": "Llamada perdida",
+  "body": "Mamá, 2 llamadas perdidas",
+  "mustReach": true,
+  "conversation": false,
+  "hint": "call"
+ },
+ {
+  "lang": "spanish",
+  "kind": "delivery",
+  "pkg": "com.delivery",
+  "title": "Glovo",
+  "body": "Tu pedido llega en 5 minutos",
+  "mustReach": false,
+  "conversation": false,
+  "hint": null
+ },
+ {
+  "lang": "spanish",
+  "kind": "promo_sale",
+  "pkg": "com.shop.app",
+  "title": "Zara",
+  "body": "70% de descuento, solo hasta esta noche",
+  "mustReach": false,
+  "conversation": false,
+  "hint": null
+ },
+ {
+  "lang": "spanish",
+  "kind": "social_like",
+  "pkg": "com.instagram.android",
+  "title": "Instagram",
+  "body": "A rohan le gustó tu foto",
+  "mustReach": false,
+  "conversation": false,
+  "hint": null
+ },
+ {
+  "lang": "spanish",
+  "kind": "game_spam",
+  "pkg": "com.game.candy",
+  "title": "Juego",
+  "body": "Tus vidas están completas, vuelve a jugar",
+  "mustReach": false,
+  "conversation": false,
+  "hint": null
+ },
+ {
+  "lang": "portuguese",
+  "kind": "family_emergency",
+  "pkg": "com.whatsapp",
+  "title": "Mãe",
+  "body": "Levamos o pai ao hospital, me liga agora",
+  "mustReach": true,
+  "conversation": true,
+  "hint": null
+ },
+ {
+  "lang": "portuguese",
+  "kind": "partner_now",
+  "pkg": "com.whatsapp",
+  "title": "Ana",
+  "body": "Estou te esperando na frente do escritório, desce",
+  "mustReach": true,
+  "conversation": true,
+  "hint": null
+ },
+ {
+  "lang": "portuguese",
+  "kind": "family_routine",
+  "pkg": "com.whatsapp",
+  "title": "Mãe",
+  "body": "Vem jantar em casa hoje?",
+  "mustReach": false,
+  "conversation": true,
+  "hint": null
+ },
+ {
+  "lang": "portuguese",
+  "kind": "friend_plans",
+  "pkg": "com.whatsapp",
+  "title": "Lucas",
+  "body": "Livre domingo? Vamos sair",
+  "mustReach": false,
+  "conversation": true,
+  "hint": null
+ },
+ {
+  "lang": "portuguese",
+  "kind": "boss_urgent",
+  "pkg": "com.slack",
+  "title": "Gerente",
+  "body": "A demo do cliente quebrou, olha agora",
+  "mustReach": true,
+  "conversation": true,
+  "hint": null
+ },
+ {
+  "lang": "portuguese",
+  "kind": "work_routine",
+  "pkg": "com.slack",
+  "title": "Slack",
+  "body": "As notas da reunião estão no canal",
+  "mustReach": false,
+  "conversation": false,
+  "hint": null
+ },
+ {
+  "lang": "portuguese",
+  "kind": "bank_otp",
+  "pkg": "com.bank.app",
+  "title": "Banco",
+  "body": "123456 é seu código de verificação, não compartilhe",
+  "mustReach": true,
+  "conversation": false,
+  "hint": null
+ },
+ {
+  "lang": "portuguese",
+  "kind": "bank_fraud",
+  "pkg": "com.bank.app",
+  "title": "Banco",
+  "body": "Tentativa de compra de 4.500 no seu cartão",
+  "mustReach": true,
+  "conversation": false,
+  "hint": null
+ },
+ {
+  "lang": "portuguese",
+  "kind": "school_child",
+  "pkg": "com.school.app",
+  "title": "Escola",
+  "body": "Seu filho não veio à escola hoje",
+  "mustReach": true,
+  "conversation": false,
+  "hint": null
+ },
+ {
+  "lang": "portuguese",
+  "kind": "landlord_rent",
+  "pkg": "com.gmail",
+  "title": "Proprietário",
+  "body": "O aluguel está atrasado, transfira hoje",
+  "mustReach": true,
+  "conversation": false,
+  "hint": null
+ },
+ {
+  "lang": "portuguese",
+  "kind": "missed_call",
+  "pkg": "com.android.dialer",
+  "title": "Chamada perdida",
+  "body": "Mãe, 2 chamadas perdidas",
+  "mustReach": true,
+  "conversation": false,
+  "hint": "call"
+ },
+ {
+  "lang": "portuguese",
+  "kind": "delivery",
+  "pkg": "com.delivery",
+  "title": "iFood",
+  "body": "Seu pedido chega em 5 minutos",
+  "mustReach": false,
+  "conversation": false,
+  "hint": null
+ },
+ {
+  "lang": "portuguese",
+  "kind": "promo_sale",
+  "pkg": "com.shop.app",
+  "title": "Loja",
+  "body": "70% de desconto, só até hoje à noite",
+  "mustReach": false,
+  "conversation": false,
+  "hint": null
+ },
+ {
+  "lang": "portuguese",
+  "kind": "social_like",
+  "pkg": "com.instagram.android",
+  "title": "Instagram",
+  "body": "rohan curtiu sua foto",
+  "mustReach": false,
+  "conversation": false,
+  "hint": null
+ },
+ {
+  "lang": "portuguese",
+  "kind": "game_spam",
+  "pkg": "com.game.candy",
+  "title": "Jogo",
+  "body": "Suas vidas estão cheias, volte a jogar",
+  "mustReach": false,
+  "conversation": false,
+  "hint": null
+ },
+ {
+  "lang": "russian",
+  "kind": "family_emergency",
+  "pkg": "com.whatsapp",
+  "title": "Мама",
+  "body": "Папу увезли в больницу, позвони мне срочно",
+  "mustReach": true,
+  "conversation": true,
+  "hint": null
+ },
+ {
+  "lang": "russian",
+  "kind": "partner_now",
+  "pkg": "com.whatsapp",
+  "title": "Аня",
+  "body": "Я жду тебя у офиса, выходи",
+  "mustReach": true,
+  "conversation": true,
+  "hint": null
+ },
+ {
+  "lang": "russian",
+  "kind": "family_routine",
+  "pkg": "com.whatsapp",
+  "title": "Мама",
+  "body": "Придёшь сегодня на ужин?",
+  "mustReach": false,
+  "conversation": true,
+  "hint": null
+ },
+ {
+  "lang": "russian",
+  "kind": "friend_plans",
+  "pkg": "com.whatsapp",
+  "title": "Иван",
+  "body": "В воскресенье свободен? Давай куда-нибудь",
+  "mustReach": false,
+  "conversation": true,
+  "hint": null
+ },
+ {
+  "lang": "russian",
+  "kind": "boss_urgent",
+  "pkg": "com.slack",
+  "title": "Руководитель",
+  "body": "Демо у клиента сломалось, посмотри сейчас",
+  "mustReach": true,
+  "conversation": true,
+  "hint": null
+ },
+ {
+  "lang": "russian",
+  "kind": "work_routine",
+  "pkg": "com.slack",
+  "title": "Slack",
+  "body": "Заметки со встречи в канале",
+  "mustReach": false,
+  "conversation": false,
+  "hint": null
+ },
+ {
+  "lang": "russian",
+  "kind": "bank_otp",
+  "pkg": "com.bank.app",
+  "title": "Банк",
+  "body": "123456 — код подтверждения, никому не сообщайте",
+  "mustReach": true,
+  "conversation": false,
+  "hint": null
+ },
+ {
+  "lang": "russian",
+  "kind": "bank_fraud",
+  "pkg": "com.bank.app",
+  "title": "Банк",
+  "body": "Попытка списания 45 000 с вашей карты",
+  "mustReach": true,
+  "conversation": false,
+  "hint": null
+ },
+ {
+  "lang": "russian",
+  "kind": "school_child",
+  "pkg": "com.school.app",
+  "title": "Школа",
+  "body": "Ваш сын сегодня не пришёл в школу",
+  "mustReach": true,
+  "conversation": false,
+  "hint": null
+ },
+ {
+  "lang": "russian",
+  "kind": "landlord_rent",
+  "pkg": "com.gmail",
+  "title": "Хозяин",
+  "body": "Аренда просрочена, переведите сегодня",
+  "mustReach": true,
+  "conversation": false,
+  "hint": null
+ },
+ {
+  "lang": "russian",
+  "kind": "missed_call",
+  "pkg": "com.android.dialer",
+  "title": "Пропущенный",
+  "body": "Мама, 2 пропущенных вызова",
+  "mustReach": true,
+  "conversation": false,
+  "hint": "call"
+ },
+ {
+  "lang": "russian",
+  "kind": "delivery",
+  "pkg": "com.delivery",
+  "title": "Доставка",
+  "body": "Ваш заказ будет через 5 минут",
+  "mustReach": false,
+  "conversation": false,
+  "hint": null
+ },
+ {
+  "lang": "russian",
+  "kind": "promo_sale",
+  "pkg": "com.shop.app",
+  "title": "Магазин",
+  "body": "Скидка 70% только до вечера",
+  "mustReach": false,
+  "conversation": false,
+  "hint": null
+ },
+ {
+  "lang": "russian",
+  "kind": "social_like",
+  "pkg": "com.instagram.android",
+  "title": "Инстаграм",
+  "body": "Кому-то понравилось ваше фото",
+  "mustReach": false,
+  "conversation": false,
+  "hint": null
+ },
+ {
+  "lang": "russian",
+  "kind": "game_spam",
+  "pkg": "com.game.candy",
+  "title": "Игра",
+  "body": "Жизни восстановлены, заходи играть",
+  "mustReach": false,
+  "conversation": false,
+  "hint": null
+ },
+ {
+  "lang": "indonesian",
+  "kind": "family_emergency",
+  "pkg": "com.whatsapp",
+  "title": "Ibu",
+  "body": "Bapak dibawa ke rumah sakit, telepon sekarang",
+  "mustReach": true,
+  "conversation": true,
+  "hint": null
+ },
+ {
+  "lang": "indonesian",
+  "kind": "partner_now",
+  "pkg": "com.whatsapp",
+  "title": "Sari",
+  "body": "Aku nunggu di depan kantor, turun sekarang",
+  "mustReach": true,
+  "conversation": true,
+  "hint": null
+ },
+ {
+  "lang": "indonesian",
+  "kind": "family_routine",
+  "pkg": "com.whatsapp",
+  "title": "Ibu",
+  "body": "Nanti malam pulang makan di rumah?",
+  "mustReach": false,
+  "conversation": true,
+  "hint": null
+ },
+ {
+  "lang": "indonesian",
+  "kind": "friend_plans",
+  "pkg": "com.whatsapp",
+  "title": "Budi",
+  "body": "Minggu kosong? Kita keluar yuk",
+  "mustReach": false,
+  "conversation": true,
+  "hint": null
+ },
+ {
+  "lang": "indonesian",
+  "kind": "boss_urgent",
+  "pkg": "com.slack",
+  "title": "Manajer",
+  "body": "Demo klien error, cek sekarang",
+  "mustReach": true,
+  "conversation": true,
+  "hint": null
+ },
+ {
+  "lang": "indonesian",
+  "kind": "work_routine",
+  "pkg": "com.slack",
+  "title": "Slack",
+  "body": "Catatan rapat pagi sudah di channel",
+  "mustReach": false,
+  "conversation": false,
+  "hint": null
+ },
+ {
+  "lang": "indonesian",
+  "kind": "bank_otp",
+  "pkg": "com.bank.app",
+  "title": "Bank",
+  "body": "123456 adalah kode OTP Anda, jangan dibagikan",
+  "mustReach": true,
+  "conversation": false,
+  "hint": null
+ },
+ {
+  "lang": "indonesian",
+  "kind": "bank_fraud",
+  "pkg": "com.bank.app",
+  "title": "Bank",
+  "body": "Ada transaksi 4.500.000 dari rekening Anda",
+  "mustReach": true,
+  "conversation": false,
+  "hint": null
+ },
+ {
+  "lang": "indonesian",
+  "kind": "school_child",
+  "pkg": "com.school.app",
+  "title": "Sekolah",
+  "body": "Anak Anda hari ini tidak masuk sekolah",
+  "mustReach": true,
+  "conversation": false,
+  "hint": null
+ },
+ {
+  "lang": "indonesian",
+  "kind": "landlord_rent",
+  "pkg": "com.gmail",
+  "title": "Pemilik",
+  "body": "Sewa belum dibayar, mohon transfer hari ini",
+  "mustReach": true,
+  "conversation": false,
+  "hint": null
+ },
+ {
+  "lang": "indonesian",
+  "kind": "missed_call",
+  "pkg": "com.android.dialer",
+  "title": "Panggilan tidak terjawab",
+  "body": "Ibu, 2 panggilan",
+  "mustReach": true,
+  "conversation": false,
+  "hint": "call"
+ },
+ {
+  "lang": "indonesian",
+  "kind": "delivery",
+  "pkg": "com.delivery",
+  "title": "GoFood",
+  "body": "Pesanan Anda tiba dalam 5 menit",
+  "mustReach": false,
+  "conversation": false,
+  "hint": null
+ },
+ {
+  "lang": "indonesian",
+  "kind": "promo_sale",
+  "pkg": "com.shop.app",
+  "title": "Tokopedia",
+  "body": "Diskon 70% sampai malam ini",
+  "mustReach": false,
+  "conversation": false,
+  "hint": null
+ },
+ {
+  "lang": "indonesian",
+  "kind": "social_like",
+  "pkg": "com.instagram.android",
+  "title": "Instagram",
+  "body": "rohan menyukai foto Anda",
+  "mustReach": false,
+  "conversation": false,
+  "hint": null
+ },
+ {
+  "lang": "indonesian",
+  "kind": "game_spam",
+  "pkg": "com.game.candy",
+  "title": "Game",
+  "body": "Nyawa penuh, ayo main lagi",
+  "mustReach": false,
+  "conversation": false,
+  "hint": null
+ },
+ {
+  "lang": "japanese",
+  "kind": "family_emergency",
+  "pkg": "com.whatsapp",
+  "title": "お母さん",
+  "body": "お父さんが病院に運ばれた、すぐ電話して",
+  "mustReach": true,
+  "conversation": true,
+  "hint": null
+ },
+ {
+  "lang": "japanese",
+  "kind": "partner_now",
+  "pkg": "com.whatsapp",
+  "title": "さくら",
+  "body": "会社の下で待ってる、降りてきて",
+  "mustReach": true,
+  "conversation": true,
+  "hint": null
+ },
+ {
+  "lang": "japanese",
+  "kind": "family_routine",
+  "pkg": "com.whatsapp",
+  "title": "お母さん",
+  "body": "今晩は家で夕飯食べる？",
+  "mustReach": false,
+  "conversation": true,
+  "hint": null
+ },
+ {
+  "lang": "japanese",
+  "kind": "friend_plans",
+  "pkg": "com.whatsapp",
+  "title": "たけし",
+  "body": "日曜あいてる？出かけよう",
+  "mustReach": false,
+  "conversation": true,
+  "hint": null
+ },
+ {
+  "lang": "japanese",
+  "kind": "boss_urgent",
+  "pkg": "com.slack",
+  "title": "部長",
+  "body": "顧客デモが落ちた、今すぐ確認して",
+  "mustReach": true,
+  "conversation": true,
+  "hint": null
+ },
+ {
+  "lang": "japanese",
+  "kind": "work_routine",
+  "pkg": "com.slack",
+  "title": "Slack",
+  "body": "朝会のメモをチャンネルに置きました",
+  "mustReach": false,
+  "conversation": false,
+  "hint": null
+ },
+ {
+  "lang": "japanese",
+  "kind": "bank_otp",
+  "pkg": "com.bank.app",
+  "title": "銀行",
+  "body": "認証コードは123456です。他人に教えないでください",
+  "mustReach": true,
+  "conversation": false,
+  "hint": null
+ },
+ {
+  "lang": "japanese",
+  "kind": "bank_fraud",
+  "pkg": "com.bank.app",
+  "title": "銀行",
+  "body": "カードで45,000円の不審な取引がありました",
+  "mustReach": true,
+  "conversation": false,
+  "hint": null
+ },
+ {
+  "lang": "japanese",
+  "kind": "school_child",
+  "pkg": "com.school.app",
+  "title": "学校",
+  "body": "お子さんは本日欠席でした",
+  "mustReach": true,
+  "conversation": false,
+  "hint": null
+ },
+ {
+  "lang": "japanese",
+  "kind": "landlord_rent",
+  "pkg": "com.gmail",
+  "title": "大家",
+  "body": "家賃が未納です。本日振り込んでください",
+  "mustReach": true,
+  "conversation": false,
+  "hint": null
+ },
+ {
+  "lang": "japanese",
+  "kind": "missed_call",
+  "pkg": "com.android.dialer",
+  "title": "不在着信",
+  "body": "お母さん、2件の不在着信",
+  "mustReach": true,
+  "conversation": false,
+  "hint": "call"
+ },
+ {
+  "lang": "japanese",
+  "kind": "delivery",
+  "pkg": "com.delivery",
+  "title": "配達",
+  "body": "ご注文は5分後に到着します",
+  "mustReach": false,
+  "conversation": false,
+  "hint": null
+ },
+ {
+  "lang": "japanese",
+  "kind": "promo_sale",
+  "pkg": "com.shop.app",
+  "title": "ショップ",
+  "body": "今夜まで70%オフ、今すぐ購入",
+  "mustReach": false,
+  "conversation": false,
+  "hint": null
+ },
+ {
+  "lang": "japanese",
+  "kind": "social_like",
+  "pkg": "com.instagram.android",
+  "title": "インスタ",
+  "body": "あなたの写真にいいねがつきました",
+  "mustReach": false,
+  "conversation": false,
+  "hint": null
+ },
+ {
+  "lang": "japanese",
+  "kind": "game_spam",
+  "pkg": "com.game.candy",
+  "title": "ゲーム",
+  "body": "ライフが満タンです、遊びに来て",
+  "mustReach": false,
+  "conversation": false,
+  "hint": null
+ },
+ {
+  "lang": "french",
+  "kind": "family_emergency",
+  "pkg": "com.whatsapp",
+  "title": "Maman",
+  "body": "On emmène papa à l'hôpital, appelle-moi tout de suite",
+  "mustReach": true,
+  "conversation": true,
+  "hint": null
+ },
+ {
+  "lang": "french",
+  "kind": "partner_now",
+  "pkg": "com.whatsapp",
+  "title": "Julie",
+  "body": "Je t'attends devant le bureau, descends",
+  "mustReach": true,
+  "conversation": true,
+  "hint": null
+ },
+ {
+  "lang": "french",
+  "kind": "family_routine",
+  "pkg": "com.whatsapp",
+  "title": "Maman",
+  "body": "Tu viens dîner ce soir ?",
+  "mustReach": false,
+  "conversation": true,
+  "hint": null
+ },
+ {
+  "lang": "french",
+  "kind": "friend_plans",
+  "pkg": "com.whatsapp",
+  "title": "Marc",
+  "body": "Libre dimanche ? On sort ?",
+  "mustReach": false,
+  "conversation": true,
+  "hint": null
+ },
+ {
+  "lang": "french",
+  "kind": "boss_urgent",
+  "pkg": "com.slack",
+  "title": "Manager",
+  "body": "La démo client est cassée, regarde maintenant",
+  "mustReach": true,
+  "conversation": true,
+  "hint": null
+ },
+ {
+  "lang": "french",
+  "kind": "work_routine",
+  "pkg": "com.slack",
+  "title": "Slack",
+  "body": "Les notes de la réunion sont dans le canal",
+  "mustReach": false,
+  "conversation": false,
+  "hint": null
+ },
+ {
+  "lang": "french",
+  "kind": "bank_otp",
+  "pkg": "com.bank.app",
+  "title": "Banque",
+  "body": "123456 est votre code de vérification, ne le partagez pas",
+  "mustReach": true,
+  "conversation": false,
+  "hint": null
+ },
+ {
+  "lang": "french",
+  "kind": "bank_fraud",
+  "pkg": "com.bank.app",
+  "title": "Banque",
+  "body": "Tentative de paiement de 450 euros sur votre carte",
+  "mustReach": true,
+  "conversation": false,
+  "hint": null
+ },
+ {
+  "lang": "french",
+  "kind": "school_child",
+  "pkg": "com.school.app",
+  "title": "École",
+  "body": "Votre fils était absent aujourd'hui",
+  "mustReach": true,
+  "conversation": false,
+  "hint": null
+ },
+ {
+  "lang": "french",
+  "kind": "landlord_rent",
+  "pkg": "com.gmail",
+  "title": "Propriétaire",
+  "body": "Le loyer est en retard, virez aujourd'hui",
+  "mustReach": true,
+  "conversation": false,
+  "hint": null
+ },
+ {
+  "lang": "french",
+  "kind": "missed_call",
+  "pkg": "com.android.dialer",
+  "title": "Appel manqué",
+  "body": "Maman, 2 appels manqués",
+  "mustReach": true,
+  "conversation": false,
+  "hint": "call"
+ },
+ {
+  "lang": "french",
+  "kind": "delivery",
+  "pkg": "com.delivery",
+  "title": "Livraison",
+  "body": "Votre commande arrive dans 5 minutes",
+  "mustReach": false,
+  "conversation": false,
+  "hint": null
+ },
+ {
+  "lang": "french",
+  "kind": "promo_sale",
+  "pkg": "com.shop.app",
+  "title": "Boutique",
+  "body": "70% de réduction jusqu'à ce soir",
+  "mustReach": false,
+  "conversation": false,
+  "hint": null
+ },
+ {
+  "lang": "french",
+  "kind": "social_like",
+  "pkg": "com.instagram.android",
+  "title": "Instagram",
+  "body": "rohan a aimé votre photo",
+  "mustReach": false,
+  "conversation": false,
+  "hint": null
+ },
+ {
+  "lang": "french",
+  "kind": "game_spam",
+  "pkg": "com.game.candy",
+  "title": "Jeu",
+  "body": "Vos vies sont pleines, reviens jouer",
+  "mustReach": false,
+  "conversation": false,
+  "hint": null
+ },
+ {
+  "lang": "turkish",
+  "kind": "family_emergency",
+  "pkg": "com.whatsapp",
+  "title": "Anne",
+  "body": "Babamı hastaneye götürüyoruz, hemen ara",
+  "mustReach": true,
+  "conversation": true,
+  "hint": null
+ },
+ {
+  "lang": "turkish",
+  "kind": "partner_now",
+  "pkg": "com.whatsapp",
+  "title": "Elif",
+  "body": "Ofisin önünde bekliyorum, aşağı in",
+  "mustReach": true,
+  "conversation": true,
+  "hint": null
+ },
+ {
+  "lang": "turkish",
+  "kind": "family_routine",
+  "pkg": "com.whatsapp",
+  "title": "Anne",
+  "body": "Bu akşam yemeğe geliyor musun?",
+  "mustReach": false,
+  "conversation": true,
+  "hint": null
+ },
+ {
+  "lang": "turkish",
+  "kind": "friend_plans",
+  "pkg": "com.whatsapp",
+  "title": "Ahmet",
+  "body": "Pazar boş musun? Çıkalım",
+  "mustReach": false,
+  "conversation": true,
+  "hint": null
+ },
+ {
+  "lang": "turkish",
+  "kind": "boss_urgent",
+  "pkg": "com.slack",
+  "title": "Müdür",
+  "body": "Müşteri demosu bozuldu, şimdi bak",
+  "mustReach": true,
+  "conversation": true,
+  "hint": null
+ },
+ {
+  "lang": "turkish",
+  "kind": "work_routine",
+  "pkg": "com.slack",
+  "title": "Slack",
+  "body": "Sabah toplantı notları kanalda",
+  "mustReach": false,
+  "conversation": false,
+  "hint": null
+ },
+ {
+  "lang": "turkish",
+  "kind": "bank_otp",
+  "pkg": "com.bank.app",
+  "title": "Banka",
+  "body": "123456 doğrulama kodunuz, kimseyle paylaşmayın",
+  "mustReach": true,
+  "conversation": false,
+  "hint": null
+ },
+ {
+  "lang": "turkish",
+  "kind": "bank_fraud",
+  "pkg": "com.bank.app",
+  "title": "Banka",
+  "body": "Kartınızdan 45.000 TL çekilmeye çalışıldı",
+  "mustReach": true,
+  "conversation": false,
+  "hint": null
+ },
+ {
+  "lang": "turkish",
+  "kind": "school_child",
+  "pkg": "com.school.app",
+  "title": "Okul",
+  "body": "Oğlunuz bugün okula gelmedi",
+  "mustReach": true,
+  "conversation": false,
+  "hint": null
+ },
+ {
+  "lang": "turkish",
+  "kind": "landlord_rent",
+  "pkg": "com.gmail",
+  "title": "Ev sahibi",
+  "body": "Kira gecikti, bugün gönderin",
+  "mustReach": true,
+  "conversation": false,
+  "hint": null
+ },
+ {
+  "lang": "turkish",
+  "kind": "missed_call",
+  "pkg": "com.android.dialer",
+  "title": "Cevapsız çağrı",
+  "body": "Anne, 2 cevapsız çağrı",
+  "mustReach": true,
+  "conversation": false,
+  "hint": "call"
+ },
+ {
+  "lang": "turkish",
+  "kind": "delivery",
+  "pkg": "com.delivery",
+  "title": "Yemeksepeti",
+  "body": "Siparişiniz 5 dakikada geliyor",
+  "mustReach": false,
+  "conversation": false,
+  "hint": null
+ },
+ {
+  "lang": "turkish",
+  "kind": "promo_sale",
+  "pkg": "com.shop.app",
+  "title": "Mağaza",
+  "body": "Bu gece bitiyor, %70 indirim",
+  "mustReach": false,
+  "conversation": false,
+  "hint": null
+ },
+ {
+  "lang": "turkish",
+  "kind": "social_like",
+  "pkg": "com.instagram.android",
+  "title": "Instagram",
+  "body": "rohan fotoğrafını beğendi",
+  "mustReach": false,
+  "conversation": false,
+  "hint": null
+ },
+ {
+  "lang": "turkish",
+  "kind": "game_spam",
+  "pkg": "com.game.candy",
+  "title": "Oyun",
+  "body": "Canların doldu, oynamaya gel",
+  "mustReach": false,
+  "conversation": false,
+  "hint": null
+ }
+]

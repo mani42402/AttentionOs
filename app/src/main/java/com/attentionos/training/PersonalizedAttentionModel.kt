@@ -48,8 +48,9 @@ object PersonalizedAttentionModel {
      * v2: encoder moved from paraphrase-MiniLM-L3-v2 to all-MiniLM-L6-v2.
      * v3: encoder moved from a 384-dimensional transformer to a 256-dimensional static table.
      * v4: hashed package buckets appended, and the probability is Platt-calibrated.
+     * v5: encoder moved to a 128-dimensional multilingual table.
      */
-    const val MODEL_VERSION = 4
+    const val MODEL_VERSION = 5
 
     fun features(
         embedding: FloatArray?,

@@ -5,6 +5,7 @@ import android.os.SystemClock
 import android.util.Log
 import android.util.LruCache
 import com.attentionos.BuildConfig
+import com.attentionos.domain.AttentionDescriptions
 import com.attentionos.domain.KeywordLanguageAnalyzer
 import com.attentionos.domain.LanguageAnalysis
 import com.attentionos.domain.LanguageAnalyzer
@@ -14,20 +15,44 @@ import java.nio.ByteOrder
 import java.nio.channels.FileChannel
 
 /**
- * Static token-embedding encoder: `potion-base-8M`, distilled from bge-base-en-v1.5.
+ * Static token-embedding encoder: `static-similarity-mrl-multilingual-v1`, truncated to 128
+ * dimensions.
  *
- * There is no transformer here. Each token has one pretrained 256-dimensional vector and a
- * sentence is the mean of its tokens, so an embedding costs a few thousand additions instead of
- * six attention layers. That trade is the point: it removes ONNX Runtime from the app entirely,
- * which is the single largest thing in the binary.
+ * There is no transformer here. Each token has one pretrained vector and a sentence is the mean
+ * of its tokens, so an embedding costs a few thousand additions instead of a forward pass. That
+ * is what lets the app ship with no inference runtime at all.
  *
- * It is a real trade rather than a free win — a bag of token vectors cannot represent word order,
- * so "the payment failed" and "failed the payment" embed identically. Whether that costs anything
- * on *notification* text was measured before adopting it; see docs/MODEL_STRATEGY.md.
+ * Multilingual by vocabulary rather than by heuristic: 105,879 WordPiece tokens covering Latin,
+ * Han, Devanagari, Arabic, Cyrillic, Hangul and Kana, against the 29,528 English-only tokens
+ * this replaced. Measured on real notifications, the unknown-token rate for Hindi, Urdu, Chinese
+ * and Spanish went to 0.0% from as high as 68%.
+ *
+ * The model is Matryoshka-trained, so its leading dimensions stand alone. 128 outscored 256 on
+ * the labelled set while halving both the asset and the per-notification arithmetic, so the
+ * cheaper truncation is also the better one.
+ *
+ * It remains a real trade: a bag of token vectors cannot represent word order, so "the payment
+ * failed" and "failed the payment" embed identically. docs/MODEL_STRATEGY.md records what that
+ * costs.
  */
+/**
+ * Which table an analyzer reads, so candidates can be compared without editing constants.
+ *
+ * [assets] names the [android.content.res.AssetManager] the files live in — the shipped encoder
+ * comes from the app's own assets, while a bake-off candidate is packaged with the test.
+ */
+data class EncoderAsset(
+    val tablePath: String,
+    val vocabPath: String,
+    val dimensions: Int,
+    val version: String,
+    val fromTestAssets: Boolean = false,
+)
+
 class StaticEmbeddingAnalyzer(
     private val context: Context,
     private val fallback: KeywordLanguageAnalyzer = KeywordLanguageAnalyzer(),
+    private val asset: EncoderAsset = SHIPPED,
 ) : LanguageAnalyzer {
     private val loadLock = Any()
 
@@ -55,8 +80,14 @@ class StaticEmbeddingAnalyzer(
             val startedAt = SystemClock.elapsedRealtime()
             val embedding = active.embed(content) ?: return@runCatching null
 
-            var categoryMatch: NotificationCategory? = null
-            var categoryScore = -1f
+            // Nearest prototype wins outright. There used to be an absolute cosine cutoff of
+            // 0.22 below which the category was discarded, which was a number calibrated against
+            // one embedding space: moving to a different table changed how cosines distribute and
+            // silently stopped security alerts being recognised as SECURITY, which cost them
+            // their safety floor. The prototype set already contains OTHER, so the comparison
+            // normalises itself — if nothing fits, "a general notification" is the nearest.
+            var categoryMatch = NotificationCategory.OTHER
+            var categoryScore = -2f
             active.categoryEmbeddings.forEach { (category, prototype) ->
                 val score = cosineOf(embedding, prototype)
                 if (score > categoryScore) {
@@ -64,16 +95,47 @@ class StaticEmbeddingAnalyzer(
                     categoryMatch = category
                 }
             }
-            val urgentSimilarity = cosineOf(embedding, active.urgentEmbedding)
-            val routineSimilarity = cosineOf(embedding, active.routineEmbedding)
-            val semanticUrgency = (
-                0.45f + (urgentSimilarity - routineSimilarity) * URGENCY_SPREAD
-                ).coerceIn(0f, 1f)
+            // The nearest description wins outright. No threshold, no weighted sum: whichever
+            // sentence in AttentionDescriptions this notification is closest to names its band.
+            var bestBand = AttentionDescriptions.Band.WORTH_KNOWING
+            var bestScore = -2f
+            var runnerUp = -2f
+            active.descriptionEmbeddings.forEach { (band, vectors) ->
+                var bandBest = -2f
+                vectors.forEach { vector ->
+                    val score = cosineOf(embedding, vector)
+                    if (score > bandBest) bandBest = score
+                }
+                if (bandBest > bestScore) {
+                    runnerUp = bestScore
+                    bestScore = bandBest
+                    bestBand = band
+                } else if (bandBest > runnerUp) {
+                    runnerUp = bandBest
+                }
+            }
+
+            // How clearly the winner won, used only to shade the urgency number.
+            //
+            // Abstaining on a thin margin was tried and removed. Sweeping the cutoff from 0.005
+            // to 0.08 moved held-out recall 48% -> 16% and noise rejection 70% -> 86%, sliding
+            // along the same trade-off curve at every point. Had the margin carried information
+            // about correctness, abstaining would have improved both at once. It improved
+            // neither, which says the similarities are close to uninformative on scenarios no
+            // description was written for.
+            val margin = (bestScore - runnerUp).coerceIn(0f, 0.5f)
+            val semanticUrgency = when (bestBand) {
+                AttentionDescriptions.Band.REACH_NOW -> 0.72f + margin
+                AttentionDescriptions.Band.WORTH_KNOWING -> 0.48f + margin * 0.4f
+                AttentionDescriptions.Band.CAN_WAIT -> 0.28f
+                AttentionDescriptions.Band.NOISE -> 0.10f
+            }.coerceIn(0f, 1f)
 
             SemanticResult(
                 embedding = embedding,
-                category = categoryMatch?.takeIf { categoryScore >= CATEGORY_THRESHOLD },
+                category = categoryMatch,
                 urgency = semanticUrgency,
+                band = bestBand,
             ).also {
                 if (BuildConfig.DEBUG) {
                     Log.d(
@@ -96,13 +158,18 @@ class StaticEmbeddingAnalyzer(
         urgency = maxOf(fallbackResult.urgency, semantic.urgency),
         category = semantic.category ?: fallbackResult.category,
         semanticEmbedding = semantic.embedding,
-        modelVersion = MODEL_VERSION,
+        modelVersion = asset.version,
+        band = semantic.band,
+        // Carried through from the keyword pass. The model's own nearest-prototype guess is not
+        // allowed to trigger a floor.
+        deterministicCategory = fallbackResult.deterministicCategory,
     )
 
     private class SemanticResult(
         val embedding: FloatArray,
         val category: NotificationCategory?,
         val urgency: Float,
+        val band: AttentionDescriptions.Band,
     )
 
     private fun state(): RuntimeState? {
@@ -120,9 +187,22 @@ class StaticEmbeddingAnalyzer(
         }
     }
 
+    /**
+     * Bake-off candidates are packaged in the instrumentation APK rather than the app, so a
+     * candidate's files are read from that context's assets instead.
+     */
+    private fun assets(): android.content.res.AssetManager =
+        if (asset.fromTestAssets) {
+            context.packageManager
+                .getResourcesForApplication("${context.packageName}.test")
+                .assets
+        } else {
+            context.assets
+        }
+
     private fun createRuntime(): RuntimeState {
         val startedAt = SystemClock.elapsedRealtime()
-        val vocabulary = context.assets.open(VOCAB_ASSET).bufferedReader().use { it.readLines() }
+        val vocabulary = assets().open(asset.vocabPath).bufferedReader().use { it.readLines() }
         val table = readTable()
         require(table.vocabularySize == vocabulary.size) {
             "table has ${table.vocabularySize} rows but the vocabulary has ${vocabulary.size}"
@@ -130,14 +210,14 @@ class StaticEmbeddingAnalyzer(
         val tokenizer = WordPieceTokenizer(vocabulary)
 
         val state = RuntimeState(tokenizer, table)
-        // Prototypes are embedded once at load. These are the sentences the transformer
-        // encoder used too, so the bake-off compared like with like.
-        state.urgentEmbedding = state.embed(URGENT_PROTOTYPE)!!
-        state.routineEmbedding = state.embed(ROUTINE_PROTOTYPE)!!
+        // Descriptions and category prototypes are embedded once at load, so a notification
+        // costs one embedding plus a few dozen dot products of 128 floats.
+        state.descriptionEmbeddings = AttentionDescriptions.byBand
+            .mapValues { (_, texts) -> texts.mapNotNull { state.embed(it) } }
         state.categoryEmbeddings = categoryPrototypes
             .mapValues { (_, prompt) -> state.embed(prompt)!! }
 
-        Log.i(LOG_TAG, "potion ready in ${SystemClock.elapsedRealtime() - startedAt}ms")
+        Log.i(LOG_TAG, "${asset.version} ready in ${SystemClock.elapsedRealtime() - startedAt}ms")
         return state
     }
 
@@ -148,7 +228,7 @@ class StaticEmbeddingAnalyzer(
      * Java heap; the rows are touched sparsely, a few per notification.
      */
     private fun readTable(): QuantizedTable {
-        context.assets.openFd(TABLE_ASSET).use { descriptor ->
+        assets().openFd(asset.tablePath).use { descriptor ->
             descriptor.createInputStream().use { stream ->
                 val channel = stream.channel
                 val mapped = channel
@@ -159,8 +239,8 @@ class StaticEmbeddingAnalyzer(
                 require(magic.contentEquals(MAGIC)) { "not a potion table" }
                 val vocabularySize = mapped.int
                 val dimensions = mapped.int
-                require(dimensions == EMBEDDING_SIZE) {
-                    "table is ${dimensions}-dimensional, expected $EMBEDDING_SIZE"
+                require(dimensions == asset.dimensions) {
+                    "table is ${dimensions}-dimensional, expected ${asset.dimensions}"
                 }
 
                 val scales = FloatArray(vocabularySize)
@@ -198,8 +278,7 @@ class StaticEmbeddingAnalyzer(
         private val tokenizer: WordPieceTokenizer,
         private val table: QuantizedTable,
     ) {
-        lateinit var urgentEmbedding: FloatArray
-        lateinit var routineEmbedding: FloatArray
+        lateinit var descriptionEmbeddings: Map<AttentionDescriptions.Band, List<FloatArray>>
         lateinit var categoryEmbeddings: Map<NotificationCategory, FloatArray>
 
         /**
@@ -224,10 +303,18 @@ class StaticEmbeddingAnalyzer(
     internal companion object {
         fun modelVersion(): String = MODEL_VERSION
 
-        const val TABLE_ASSET = "models/potion-base-8m-q8.bin"
-        const val VOCAB_ASSET = "models/potion-vocab.txt"
-        const val MODEL_VERSION = "potion-base-8M-q8"
-        const val EMBEDDING_SIZE = 256
+        /** The encoder the app ships with. */
+        val SHIPPED = EncoderAsset(
+            tablePath = TABLE_ASSET,
+            vocabPath = VOCAB_ASSET,
+            dimensions = EMBEDDING_SIZE,
+            version = MODEL_VERSION,
+        )
+
+        const val TABLE_ASSET = "models/multilingual-128d-q8.bin"
+        const val VOCAB_ASSET = "models/multilingual-128d-vocab.txt"
+        const val MODEL_VERSION = "static-mrl-multilingual-128d-q8"
+        const val EMBEDDING_SIZE = 128
         const val LOG_TAG = "AttentionAI"
         const val EMBEDDING_CACHE_ENTRIES = 64
 
@@ -237,17 +324,16 @@ class StaticEmbeddingAnalyzer(
          */
         const val MAX_TOKENS = 256
 
-        const val CATEGORY_THRESHOLD = 0.22f
-
         /**
          * Static embeddings are less spread out than transformer ones, so the same raw gap
          * between the urgent and routine prototypes means more. Calibrated on the labelled set.
          */
         const val URGENCY_SPREAD = 1.35f
 
+
         val MAGIC = byteArrayOf('P'.code.toByte(), '2'.code.toByte(), 'V'.code.toByte(), '1'.code.toByte())
 
-        val EXPECTED_VOCABULARY_SIZE = 29_528
+        val EXPECTED_VOCABULARY_SIZE = 105_879
 
         const val URGENT_PROTOTYPE =
             "This is an emergency requiring immediate action and a fast response."
@@ -256,7 +342,8 @@ class StaticEmbeddingAnalyzer(
 
         val categoryPrototypes = mapOf(
             NotificationCategory.SECURITY to
-                "Security warning, suspicious login, verification code, fraud or locked account.",
+                "Security warning, suspicious sign-in from a new device, verification or " +
+                    "one-time code, password or two-factor change, fraud, or a locked account.",
             NotificationCategory.FINANCE to
                 "Bank transaction, payment, card charge, invoice or account balance.",
             NotificationCategory.WORK to

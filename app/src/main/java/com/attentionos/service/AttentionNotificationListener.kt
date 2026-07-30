@@ -121,9 +121,27 @@ class AttentionNotificationListener : NotificationListenerService() {
         rankingMap: RankingMap,
         reason: Int,
     ) {
+        // REASON_APP_CANCEL is the strongest engagement signal Android gives us and it was being
+        // thrown away. When somebody reads or replies inside WhatsApp, WhatsApp removes its own
+        // notification — the user never taps ours and never swipes it, so neither CLICK nor
+        // CANCEL fires. Every reply the user has ever sent was invisible to the learning.
+        //
+        // We cannot see the reply text, and do not want to. "The sending app withdrew this while
+        // the user was in it" is enough to know they dealt with it.
         val action = when (reason) {
-            REASON_CLICK -> UserAction.OPENED
-            REASON_CANCEL, REASON_CANCEL_ALL -> UserAction.DISMISSED
+            REASON_CLICK, REASON_APP_CANCEL, REASON_APP_CANCEL_ALL -> UserAction.OPENED
+
+            // A single deliberate swipe is a judgement about that one notification.
+            REASON_CANCEL -> UserAction.DISMISSED
+
+            // "Clear all" is not a judgement about anything. It used to be recorded as a
+            // dismissal, and a dismissal drives that sender's importance to 0.15 — so every time
+            // a user tidied their shade, the app learned *against* whoever was sitting in it.
+            // The notifications most likely to be sitting there are the ones already dealt with
+            // in the app, which are precisely the people who matter. Bulk clears now teach
+            // nothing, which is the honest reading of them.
+            REASON_CANCEL_ALL -> return
+
             else -> return
         }
         val key = sbn.key

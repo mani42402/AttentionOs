@@ -81,7 +81,6 @@ internal fun SettingsScreen(
     onReminderChanged: (Boolean) -> Unit,
     onReminderTimesChanged: (Set<Int>) -> Unit,
     onThemeModeChanged: (ThemeMode) -> Unit,
-    onDynamicColorChanged: (Boolean) -> Unit,
     onMotionChanged: (Boolean) -> Unit,
     onScreenSecurityChanged: (Boolean) -> Unit,
     onRequestNotificationPermission: () -> Unit,
@@ -190,13 +189,6 @@ internal fun SettingsScreen(
                 ThemeModeSelector(
                     selected = ThemeMode.fromStorage(settings.themeMode),
                     onSelected = onThemeModeChanged,
-                )
-                RowDivider()
-                ToggleRow(
-                    title = stringResource(R.string.settings_use_wallpaper_colours),
-                    subtitle = stringResource(R.string.settings_match_the_system_palette_instead_of_the),
-                    checked = settings.dynamicColor,
-                    onCheckedChange = onDynamicColorChanged,
                 )
                 RowDivider()
                 ToggleRow(
@@ -587,7 +579,7 @@ private fun SettingsPreview() {
                 onLearningChanged = {}, onCriticalSoundChanged = {}, onCriticalVibrationChanged = {},
                 onHighSoundChanged = {}, onHighVibrationChanged = {}, onMediumSoundChanged = {},
                 onMediumVibrationChanged = {}, onReminderChanged = {}, onReminderTimesChanged = {},
-                onThemeModeChanged = {}, onDynamicColorChanged = {}, onMotionChanged = {},
+                onThemeModeChanged = {}, onMotionChanged = {},
                 onScreenSecurityChanged = {}, onRequestNotificationPermission = {},
                 onRetentionChanged = {}, onReplayOnboarding = {}, onExport = {},
                 onResetPersonalizedModel = {}, onDelete = {},

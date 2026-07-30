@@ -2,85 +2,66 @@
 
 ## Current encoder
 
-`potion-base-8M` — a static token-embedding table distilled from `bge-base-en-v1.5`, quantised
-to INT8.
+`sentence-transformers/static-similarity-mrl-multilingual-v1`, Matryoshka-truncated to 128
+dimensions and quantised to INT8.
 
 | | |
 |---|---|
-| Asset | 7.3 MB (`models/potion-base-8m-q8.bin`) + 0.2 MB vocabulary |
-| Embedding | 256 dimensions |
-| Vocabulary | pruned bert-base-uncased WordPiece, 29,528 tokens |
+| Asset | 13.3 MB table + 0.8 MB vocabulary |
+| Embedding | 128 dimensions |
+| Vocabulary | 105,879 WordPiece tokens, multilingual |
 | Runtime | none — a memory-mapped lookup table |
-| Licence | MIT |
+| Licence | Apache-2.0 |
 
-There is no transformer. Every token has one pretrained vector and a sentence is the mean of its
-tokens, normalised. A notification therefore costs a few thousand additions instead of six
-attention layers.
-
-The honest description of the trade: a bag of token vectors **cannot represent word order**, so
-"the payment failed" and "failed the payment" embed identically. That is a real limitation, and
-the only reason it is acceptable is that it was measured on notification text rather than
-assumed away.
-
-### What it replaced
-
-`all-MiniLM-L6-v2` INT8 plus ONNX Runtime. Removing both is the largest size change the project
-will ever make:
+Script coverage against the English table it replaced:
 
 | | before | after |
 |---|---|---|
-| Download (AAB, excluding metadata) | 29.9 MB | **9.8 MB** |
-| Install footprint | 53.3 MB | **11.9 MB** |
-| `libonnxruntime.so` | 26.7 MB | gone |
-| encoder asset | 22.0 MB | 7.3 MB |
+| Latin | 27,769 | 57,928 |
+| Han | 492 | 16,694 |
+| Cyrillic | 86 | 12,163 |
+| Arabic | 88 | 4,526 |
+| Devanagari | 70 | 1,596 |
+| Hangul | 70 | 1,397 |
+| Kana | 188 | 1,187 |
 
-ONNX Runtime measured **26.7 MB**, not the 6–15 MB the original plan assumed. That single
-correction is what made the bake-off decisive rather than marginal.
+Rebuild with `tools/build_encoder_asset.py`, which refuses to emit an asset whose INT8
+reconstruction cosine drops below 0.999 or whose tokenizer is not WordPiece.
 
-## Bake-off: `all-MiniLM-L6-v2` vs `potion-base-8M`
+**128 dimensions, not 256.** Matryoshka training makes the leading dimensions usable alone, and
+128 scored the same as 256 on the labelled set while halving both the asset and the
+per-notification arithmetic. No reason to pay twice for it.
 
-Run by `EncoderEvaluationTest` on an Android 16 emulator: identical samples, identical scoring,
-identical prototype sentences, one encoder swapped.
+Download is 16.3 MB and the install footprint 18.2 MB, against a 30 MB budget. Median inference
+fell from 2.05 ms to 1.38 ms *despite* the larger vocabulary, because the embedding is half as
+wide.
 
-A first run over 20 samples put MiniLM ahead on category accuracy by 5 points. That is one
-sample. The labelled set was widened to 50 before anything was decided, and the ordering
-reversed — which is the whole reason the first number could not be trusted.
+## Three faults, each hiding the next
 
-```
-                    all-MiniLM-L6-v2   potion-base-8M
-samples                           50               50
-category accuracy              68.0%            72.0%
-guaranteed alerts    100.0% (12/12)   100.0% (12/12)   [asserted]
-wanted promptly       70.6% (12/17)     70.6% (12/17)  [measured]
-correctly quiet       84.8% (28/33)     81.8% (27/33)
-latency median                4.6 ms           1.9 ms
-latency p90                   7.3 ms           3.3 ms
-```
+**The encoder could not read most of the world.** `potion-base-8M` is distilled from an English
+model: 94% Latin vocabulary, 70 Devanagari tokens, 88 Arabic. Chinese came back 68% unknown.
 
-**Decision: adopt `potion-base-8M`.** Not because it scores better — a 2-sample difference on a
-50-sample set is noise in both directions — but because it is *not measurably worse* on any
-metric that matters, ties exactly on both safety and ranking measures, is 2.4× faster, and costs
-20 MB less to download and 41 MB less on disk.
+**The tokenizer was shredding Indic and Arabic script.** The word pattern was `[\p{L}\p{N}]+`,
+and Devanagari vowel signs are Unicode `Mc`, not letters — so "पापा" split into four "words" at
+every matra and emitted 18 pieces where the reference emits 11. Every such notification was
+reduced to syllable fragments whose embeddings mean nothing. It looked like a model problem until
+somebody compared token counts against the reference tokenizer.
 
-What the numbers do **not** support is a claim that the static encoder understands notifications
-better. The defensible statement is that on this task, at this text length, the transformer's
-extra capacity was not buying anything measurable.
+**Attention Mode made the top of the scale unreachable.** It subtracted 0.17 from every
+non-urgent score so MEDIUM items would fall into the queueable band. A conversation from an
+unknown sender has a ceiling of 0.850; the penalty took it to 0.680; `HIGH` begins at 0.680. No
+encoder output could clear it — a perfect oracle returning urgency 1.0 landed exactly on the
+threshold. Attention Mode now widens the queue band instead, which achieves the same restraint
+without touching classification.
 
-Both encoders miss the same five "wanted promptly" cases, and both hold every hard safety floor
-at 100%. The shared misses are a personalization gap, not an encoder gap — see below.
+That third fault is why the first bake-off appeared to show the encoder did not matter: every
+candidate scored an identical 4/11 on English because all three were hitting the same cap.
 
-### Consequences
-
-- ONNX Runtime, the MiniLM assets, and `MiniLmLanguageAnalyzer` are deleted.
-- The tokenizer's `[CLS]`/`[SEP]` bracketing and attention mask existed only to build ONNX input
-  tensors. Static pooling averages per-token vectors directly, so both were removed rather than
-  left as unreachable code.
-- Embeddings move 384 → 256 dimensions, so `PersonalizedAttentionModel.MODEL_VERSION` is 3 and
-  weights learned in the old feature space are discarded rather than reinterpreted.
-- `StaticEmbeddingParityTest` checks the Kotlin tokenizer against HuggingFace `tokenizers` on the
-  shipped vocabulary, including accented Latin and CJK. A bake-off between two encoders is
-  meaningless if one of them is not the model it claims to be, and a one-rule difference in
-  normalisation would not show up anywhere in a scorecard.
+**A calibrated constant broke on contact with a new model.** Category assignment discarded any
+match below a cosine of 0.22, a number tuned against one embedding space. In the new space it
+silently stopped recognising security alerts as SECURITY, costing them their safety floor. The
+prototype set already contains an OTHER entry, so nearest-prototype normalises itself; the
+threshold was removed rather than retuned.
 
 ## Personalization
 
@@ -144,6 +125,208 @@ measurable only against real correction histories, which do not exist until the 
 used. Shipping it now would mean rewriting the safety gates on the strength of a guess.
 
 
+## How a notification is classified
+
+The nearest description decides. Nothing is added up.
+
+`AttentionDescriptions` holds ~50 sentences describing *reasons a notification matters* — "a family
+member has been hurt and needs you", "money has left my account without my permission", "a shop is
+advertising a discount". Each names a band. At load the encoder embeds them once; each notification
+is then one embedding plus a few dozen dot products of 128 floats, and takes the band of whichever
+sentence it lands nearest.
+
+Two things may adjust the result, and both may only **raise** it:
+
+- **Deterministic safety floors** — a call, an alarm, or a keyword-confirmed security or finance
+  event. These are promises the product makes, so they rest on evidence rather than on a model
+  being right. The model's own nearest-category guess is deliberately *not* allowed to trigger one:
+  nearest-prototype always returns something, and letting a guess drive a floor promoted a third of
+  the corpus noise to HIGH.
+- **A sender the user actually engages with** — three or more interactions and a 70% open rate. Who
+  sent something outranks what it says, in any language, however novel the phrasing. It is the one
+  signal that can never be out-of-vocabulary, and it was previously worth 0.08 in a sum.
+
+### What this replaced
+
+```
+score  = 0.28                              constant
+       + urgency          x 0.34           <- the only model output
+       + senderImportance x 0.20           0.5 when the sender is unknown
+       + senderOpenRate   x 0.10           0.5 when the sender is unknown
+       + 0.08 if a conversation
+       + 0.28 SECURITY / 0.13 FINANCE / -0.32 PROMOTION
+priority = score >= 0.86 CRITICAL / 0.68 HIGH / 0.46 MEDIUM / 0.24 LOW
+```
+
+Nine tuned constants and four thresholds, with the model supplying one number weighted 0.34. For an
+unknown sender, 0.43 of the score was fixed before any content was read — which is why tuning a
+single constant once moved accuracy further than replacing the entire encoder did. All of it is
+gone.
+
+### Why descriptions rather than a trained head
+
+A trained classifier needs labelled examples, and the only ones available are written by hand, so
+the head would learn that phrasing. Descriptions need no training data, so there is nothing to
+overfit to. They are matched in a multilingual space, so each is written **once**, in one language,
+and covers every language the encoder reads — a keyword list would need every phrasing in every
+language.
+
+They are also debuggable in a way a prompt is not. Add a sentence, re-run 225 cases, read exactly
+what moved. Two descriptions here were caught over-reaching that way: "a driver is at my door" was
+matching every "your order is 5 minutes away", and "asking me a direct question" was matching
+casual weekend plans. Narrowing both recovered 6 noise cases for 2 recall.
+
+### The bound
+
+The list enumerates *reasons to care*, not phrasings. New apps appear constantly; new reasons for a
+human to need something almost never. ~50 sentences cover 15 message kinds across 15 languages.
+
+That claim is falsifiable, and this is where it fails: if real users keep needing reasons not on the
+list, the space is not bounded and a model that can be instructed in prose is the better answer. The
+seam exists — `LanguageAnalyzer` is an interface and `EncoderAsset` is injectable — so a cascade
+sending only the ambiguous minority to a larger model is an implementation, not a rewrite.
+
+## Measured on the full corpus
+
+225 cases: 15 languages x 15 message kinds, including **Roman Urdu and Hinglish**, in
+`androidTest/assets/notification-corpus.json`.
+
+```
+                          weighted sum      descriptions
+must-reach                  71/120  59%      110/120  92%
+noise correctly quiet       86/105  82%       85/105  81%
+
+by message kind                  before            after
+  family emergency            8/15  53%       15/15  100%
+  bank OTP                   15/15 100%       15/15  100%
+  bank fraud                 15/15 100%       15/15  100%
+  missed call                15/15 100%       15/15  100%
+  school: child absent        0/15   0%       15/15  100%
+  landlord: rent overdue      4/15  27%       14/15   93%
+  boss: urgent problem        5/15  33%       11/15   73%
+  partner: waiting outside    9/15  60%       10/15   67%
+```
+
+Recall rose 33 points and noise rejection held. Per-language spread is 67-100% with Roman Urdu at
+88%, unknown tokens 0.0% everywhere. Median inference 1.4 ms, p99 2.9 ms; safety floors held
+102/102 under a 400-notification flood.
+
+`school_child` going 0/15 to 15/15 is the clearest single result: nothing about the encoder changed
+between those two numbers, only what was allowed to decide.
+
+### What is still wrong
+
+Category accuracy on the older 50-sample English set reads 52%, down from 68%. That set scores the
+*category label*, which is now a nearest-prototype guess with no cutoff and which no longer feeds
+any decision except through the deterministic floors. It should be retired or rewritten to score
+bands.
+
+`partner_now` at 67% and `boss_urgent` at 73% are the weakest real kinds. Both are short messages
+whose urgency is contextual — "come down now" means something only if you agreed to meet.
+
+## Held-out test: the descriptions do not generalise
+
+`CorpusEvaluationTest.scoreHeldOutCorpus` runs 135 notifications across 17 languages whose
+scenarios **no description mentions** — a death in the family, an urgent blood request, a gas leak,
+a visa appointment, a job interview, a towed car, a power cut, a delayed salary, an approved loan,
+an insurance claim, a 2FA push, a ride that has arrived, a meeting starting in ten minutes, a
+shared document, a code review, a monitoring page, a crypto move, a cricket score, a low battery, a
+birthday, traffic — plus an informal register the tidy descriptions never use: "u free tn?",
+"where r u?? been waiting 20 mins outside", "abu ki tabiyat kharb hai jaldi ghr aao".
+
+Both architectures were scored on it by reverting the decision logic and re-running the same file:
+
+```
+                     own corpus            held out
+weighted sum        71/120  59%      34/85  40%   quiet 40/50  80%
+descriptions       110/120  92%      41/85  48%   quiet 34/50  68%
+```
+
+**The 92% was mostly self-consistency.** The same hand wrote the descriptions and that corpus. On
+scenarios nobody wrote a description for, the descriptions buy 8 points of recall and give back 12
+points of noise rejection. That is close to a wash.
+
+### What this falsifies
+
+The claim that ~50 sentences bound the space of reasons a notification matters. This one held-out
+set alone needed:
+
+- a death in the family — matched only WORTH_KNOWING, so `janaza aaj asar ke baad` reads as chat
+- an urgent blood request — LOW
+- a visa or official appointment — LOW
+- a meeting starting in ten minutes — LOW
+- a ride that has arrived — MEDIUM
+- an informal message from someone waiting — `where r u?? been waiting 20 mins outside` → **SILENT**
+
+And it over-promotes in the other direction, because a sentence written to catch one thing catches
+its neighbours: a cricket score reached CRITICAL in Hindi, a building notice about the water supply
+reached CRITICAL in English, an approved car loan and a code review both reached HIGH.
+
+That last group is the more instructive failure. Adding descriptions for the misses would very
+likely promote more of the noise, because the mechanism has no notion of *how confident* it is —
+only which sentence is nearest. Every new description is a new opportunity for something unrelated
+to land beside it.
+
+### What it means
+
+The honest reading is that neither architecture works well enough on notifications it has not seen.
+Nearest-description matching is principled, debuggable and cheap, and it is still only 48%.
+
+This is the evidence for a model that can be *instructed* rather than *matched* — the case for
+`multilingual-e5-small` at ~145 MB, or a small generative model, sitting behind the cheap encoder
+as a second stage for the notifications the first stage is unsure about. That cascade is now worth
+building rather than speculating about, and the seam for it already exists: `LanguageAnalyzer` is an
+interface and `EncoderAsset` is injectable.
+
+What should not happen is more descriptions. The held-out number is the one to move, and adding
+sentences tuned against the set they were written for is how the 92% happened in the first place.
+
+## Where this stops, and why
+
+Confidence abstention was tried and removed. Sweeping the margin cutoff:
+
+```
+margin   own corpus              held out
+0.005    109/120 91%  quiet 83%   41/85 48%  quiet 70%
+0.01     108/120 90%  quiet 84%   39/85 46%  quiet 70%
+0.02     107/120 89%  quiet 87%   32/85 38%  quiet 72%
+0.04     102/120 85%  quiet 91%   25/85 29%  quiet 82%
+0.08      88/120 73%  quiet 97%   14/85 16%  quiet 86%
+```
+
+Every point slides along the same trade-off curve. Had the margin carried information about
+correctness, abstaining on thin margins would have improved recall *and* noise rejection at once.
+It improved neither. The similarities are close to uninformative on scenarios no description was
+written for.
+
+That is the ceiling of this approach, measured: **~48% held-out recall.** More descriptions, better
+thresholds and better prompt-style tuning all operate inside it, and the way to appear to beat it is
+to tune against the set you then report — which is exactly how the 92% happened.
+
+### What actually moves it
+
+**A model that can be instructed, not matched.** Worth being precise about the options, because one
+of them is a trap:
+
+- `multilingual-e5-small` at ~145 MB is a *better embedding model*, not an instructable one. It
+  would raise the ceiling and leave the architecture unchanged — still descriptions or a trained
+  head behind it. Probably worth 10-15 points, not a different game.
+- A small generative model at ~300 MB with a cascade is the only option that genuinely removes the
+  description problem: give it the text and a rubric, get a band. The cascade is what keeps it
+  affordable — the cheap encoder handles the obvious majority and only the ambiguous slice pays the
+  460-660 ms. It fails "runs on every phone", which is a product decision rather than a technical
+  one.
+
+**Personalization, which is already built and has never been exercised against real corrections.**
+No cold-start classifier of any size knows that cricket scores do not matter to *this* user while a
+school notice does — that information is not in the notification. The centroid path works from three
+corrections; the gates in front of it (a seven-day pilot and fifty corrections) are far more
+conservative than the mechanism requires, and loosening them is free.
+
+The recommendation is to ship the current cold start, make personalization aggressive, and revisit
+the encoder when there are real correction histories to train and evaluate against. Both remaining
+options are decisions about size and battery that real usage data should settle, not guesses.
+
 ## Ruled out
 
 Researched July 2026; revisit only if the underlying facts change.
@@ -165,14 +348,14 @@ Researched July 2026; revisit only if the underlying facts change.
   host↔accelerator transfer dominate the work.
 
 
-## Multilingual (later)
+## Remaining language work
 
-`static-similarity-mrl-multilingual-v1` truncated to 128 dimensions is 13.6 MB plus a 2.5 MB
-tokenizer — *smaller than today* while covering 50+ languages, with ONNX Runtime deleted. It
-needs a real Rust tokenizer (a 105k mBERT vocabulary is beyond the hand-rolled WordPiece) and a
-dimension change. Not before the English bake-off settles.
+The encoder now reads every script the corpus covers. What is left is not the model:
 
-Note the current CJK limitation: tokenization is correct (characters are segmented per BERT's
-rules), but an English vocabulary maps most ideographs to `[UNK]`, so Chinese notifications
-carry little signal. Kana and Hangul fare better. Real multilingual quality needs the model
-above, not another tokenizer fix.
+1. **Language-independent security and finance floors.** Digit-pattern detection plus the sending
+   package. A safety floor must not depend on an English keyword list, or on any model.
+2. **Weight named-person conversations properly.** A message from a named contact in a messaging
+   app adds 0.08 to the score. That single number is why "Dad is in the hospital, call me now"
+   reads as social chatter.
+3. **Separate the category-accuracy regression** into its two causes before deciding whether it
+   matters.

@@ -21,7 +21,7 @@ import org.junit.Test
 class WordPieceTokenizerTest {
 
     private val tokenizer: WordPieceTokenizer by lazy {
-        val vocabFile = File("src/main/assets/models/potion-vocab.txt")
+        val vocabFile = File("src/main/assets/models/multilingual-128d-vocab.txt")
         assertTrue("vocabulary asset missing at ${vocabFile.absolutePath}", vocabFile.exists())
         WordPieceTokenizer(vocabFile.readLines())
     }
@@ -31,26 +31,26 @@ class WordPieceTokenizerTest {
     private fun golden(text: String, vararg ids: Int) = Golden(text, ids.toList())
 
     private val goldens: List<Golden> = listOf(
-        golden("Need production fix ASAP", 1348, 1543, 7087, 16312, 1367),
-        golden("Your verification code is 448 291", 1121, 21622, 2648, 1009, 3014, 1626, 26179),
-        golden("hello", 6598),
+        golden("Need production fix ASAP", 15415, 11961, 63944, 24687, 10373),
+        golden("Your verification code is 448 291", 12787, 44194, 25100, 13121, 10127, 35113, 28693),
+        golden("hello", 29155),
         golden(""),
         golden("   "),
-        golden("Café naïve résumé", 6674, 14749, 12752),
-        golden("Payment of \$42.50 was debited", 6915, 1003, 8, 3419, 18, 1759, 1007, 1145, 15319, 1104),
-        golden("https://example.com/path?q=1", 15776, 30, 19, 19, 1748, 18, 3018, 19, 3136, 35, 59, 33, 21),
-        golden("Meeting at 3:30pm — don't be late!", 2122, 1018, 23, 30, 1388, 8743, 523, 1129, 11, 62, 1028, 1403, 5),
-        golden("你好世界", 1, 1, 751, 1),
-        golden("紧急：生产环境故障", 1, 1, 999, 916, 1, 1, 1, 1, 1),
-        golden("Hello 你好 world", 6598, 1, 1, 1094),
-        golden("こんにちは", 661, 29223, 29200, 29194, 29204),
-        golden("안녕하세요", 469, 29012, 29027, 28998, 29016, 29031, 29011, 29012, 29003, 29015, 29005, 29019),
-        golden("🚨 Emergency alert 🚨", 1, 4063, 8505, 1),
-        golden("supercalifragilisticexpialidocious", 2571, 8295, 9134, 28187, 23417, 3594, 9294, 18318, 20279, 9091, 5319),
-        golden("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", 1),
-        golden("UPPERCASE TEXT HERE", 2362, 17388, 2799, 1188),
-        golden("multiple     spaces\tand\nnewlines", 2680, 6264, 1004, 1053, 11741),
-        golden("unaffordableword", 13483, 3252, 7557, 2091, 17357),
+        golden("Café naïve résumé", 18427, 43786, 10598, 21337),
+        golden("Payment of \$42.50 was debited", 58696, 10108, 109, 11437, 119, 10531, 10140, 65601, 10390),
+        golden("https://example.com/path?q=1", 14540, 131, 120, 120, 14577, 119, 10241, 120, 26584, 136, 159, 134, 122),
+        golden("Meeting at 3:30pm — don't be late!", 17829, 10160, 124, 131, 10225, 46445, 100, 11530, 112, 162, 10346, 12635, 106),
+        golden("你好世界", 1856, 3019, 1666, 5855),
+        golden("紧急：生产环境故障", 6572, 3712, 10046, 5830, 1751, 5689, 2908, 4251, 9181),
+        golden("Hello 你好 world", 29155, 1856, 3019, 10228),
+        golden("こんにちは", 1521, 18378, 11488, 29644, 11572),
+        golden("안녕하세요", 1174, 26646, 49345, 13045, 35132, 25169, 47024),
+        golden("🚨 Emergency alert 🚨", 100, 28348, 72456, 100),
+        golden("supercalifragilisticexpialidocious", 12278, 17513, 14808, 26415, 33452, 35632, 10661, 19781, 80343, 47838),
+        golden("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", 100),
+        golden("UPPERCASE TEXT HERE", 15961, 66840, 14059, 14048),
+        golden("multiple     spaces\tand\nnewlines", 18248, 45714, 10110, 10246, 47096),
+        golden("unaffordableword", 10155, 82796, 22741, 11522, 60961),
     )
 
     @Test
@@ -102,8 +102,8 @@ class WordPieceTokenizerTest {
     @Test
     fun `latin words survive alongside CJK in mixed text`() {
         val ids = tokenizer.encodePieces("Hello 你好 world", MAX_TOKENS).toList()
-        assertTrue("\"hello\" should still be recognised", ids.contains(6598))
-        assertTrue("\"world\" should still be recognised", ids.contains(1094))
+        assertTrue("\"hello\" should still be recognised", ids.contains(29155))
+        assertTrue("\"world\" should still be recognised", ids.contains(10228))
     }
 
     @Test
@@ -135,7 +135,7 @@ class WordPieceTokenizerTest {
 
     @Test
     fun `reports the shipped vocabulary size`() {
-        assertEquals(29_528, tokenizer.vocabularySize)
+        assertEquals(105_879, tokenizer.vocabularySize)
     }
 
     private companion object {

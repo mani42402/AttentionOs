@@ -5,8 +5,6 @@ import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.dynamicDarkColorScheme
-import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.staticCompositionLocalOf
@@ -45,7 +43,6 @@ val LocalDarkTheme = staticCompositionLocalOf { false }
 @Composable
 fun AttentionTheme(
     themeMode: ThemeMode = ThemeMode.System,
-    dynamicColor: Boolean = false,
     motionEnabled: Boolean = true,
     content: @Composable () -> Unit,
 ) {
@@ -55,16 +52,10 @@ fun AttentionTheme(
         ThemeMode.Dark -> true
     }
 
-    val context = LocalContext.current
-    val colorScheme: ColorScheme = when {
-        // Material You: let the interface adopt the user's wallpaper palette when they ask for
-        // it. Off by default, because the brand identity is part of what makes the app feel
-        // like a considered product rather than a system utility.
-        dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S ->
-            if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
-        darkTheme -> AttentionDarkColors
-        else -> AttentionLightColors
-    }
+    // No Material You option. It only half-applied: the wallpaper palette took over the
+    // colour scheme while the flow lanes and brand mark kept their own pigments, so the result
+    // was a mixture rather than a switch. One palette is the more honest answer.
+    val colorScheme: ColorScheme = if (darkTheme) AttentionDarkColors else AttentionLightColors
 
     val view = LocalView.current
     if (!view.isInEditMode) {

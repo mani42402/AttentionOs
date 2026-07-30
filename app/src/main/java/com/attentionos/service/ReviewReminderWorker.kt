@@ -12,9 +12,9 @@ import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
-import com.attentionos.AttentionApplication
 import com.attentionos.MainActivity
 import com.attentionos.R
+import com.attentionos.core.di.attentionContainer
 import kotlinx.coroutines.flow.first
 
 class ReviewReminderWorker(
@@ -22,8 +22,8 @@ class ReviewReminderWorker(
     workerParams: WorkerParameters,
 ) : CoroutineWorker(appContext, workerParams) {
     override suspend fun doWork(): Result {
-        val app = applicationContext as AttentionApplication
-        val settings = app.container.settingsRepository.settings.first()
+        val settings = applicationContext.attentionContainer
+            .settingsRepository.settings.first()
         if (!settings.reviewReminderEnabled) return Result.success()
         if (
             ContextCompat.checkSelfPermission(

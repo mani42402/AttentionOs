@@ -131,7 +131,17 @@ internal class WordPieceTokenizer(vocabulary: List<String>) {
         const val MAX_CHARS_PER_TOKEN = 100
 
         private val COMBINING_MARKS = Regex("\\p{Mn}+")
-        private val TOKEN_PATTERN = Regex("[\\p{L}\\p{N}]+|[^\\s\\p{L}\\p{N}]")
+        /**
+         * Words are letters, digits **and combining marks**; everything else is punctuation.
+         *
+         * The marks matter. Devanagari vowel signs, Arabic harakat and similar are Unicode `Mc`
+         * and `Me`, not letters — so without them here "पापा" split into four "words" at every
+         * matra, and the tokenizer emitted 18 pieces where the reference emits 11. Every Indic
+         * and Arabic-script notification was being shredded into syllable fragments whose
+         * embeddings mean nothing, and it looked like a model problem rather than a regex one.
+         */
+        private val TOKEN_PATTERN =
+            Regex("[\\p{L}\\p{N}\\p{Mn}\\p{Mc}\\p{Me}]+|[^\\s\\p{L}\\p{N}\\p{Mn}\\p{Mc}\\p{Me}]")
     }
 }
 
