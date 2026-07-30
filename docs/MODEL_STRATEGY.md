@@ -163,6 +163,72 @@ nothing. The only language-independent floors are Android's own `categoryHint` f
 alarms. A one-time code is 4–8 digits in every script and the sending package is known, so this
 needs no model — and a safety floor should not depend on one being right.
 
+## What the scoring architecture actually does
+
+The engine computes a hand-weighted sum and then compares it to four hand-chosen thresholds:
+
+```
+score  = 0.28                              constant
+       + urgency        x 0.34             <- the only model output
+       + senderImportance x 0.20           0.5 when the sender is unknown
+       + senderOpenRate   x 0.10           0.5 when the sender is unknown
+       + 0.08 if the notification is a conversation
+       + 0.28 SECURITY / 0.13 FINANCE / -0.32 PROMOTION
+priority = score >= 0.86 CRITICAL / 0.68 HIGH / 0.46 MEDIUM / 0.24 LOW
+```
+
+The model contributes **one number in [0,1], weighted 0.34**, plus a category label. Everything
+else is a constant somebody chose. For a sender the app has never met, 0.43 of the score is fixed
+before any content is read.
+
+That is the wrong way round, and the evidence is that changing a single constant — removing the
+0.17 Attention Mode penalty — moved recall further than replacing the entire encoder did.
+
+### Measured on the full corpus
+
+225 cases: 15 languages x 15 message kinds, including **Roman Urdu and Hinglish**, in
+`androidTest/assets/notification-corpus.json`.
+
+```
+by message kind                        must-reach
+  bank_otp                               15/15   100%
+  bank_fraud                             15/15   100%
+  missed_call                            15/15   100%
+  partner_now                             9/15    60%
+  family_emergency                        8/15    53%
+  boss_urgent                             5/15    33%
+  landlord_rent                           4/15    27%
+  school_child                            0/15     0%
+                                        ------
+TOTAL must-reach                        71/120    59%
+quiet-right                             86/105    82%
+```
+
+The split is total and it is not about language. Every kind that a **deterministic floor** covers
+scores 100%. Every kind that requires **judging importance from content** scores between 0% and
+60%. A school telling a parent their child did not arrive at school reaches the user in **zero of
+fifteen languages**.
+
+By language the spread is narrow — 50% to 88%, with Roman Urdu at 63% *above* English at 50% — and
+unknown tokens are 0.0% everywhere. The encoder is not the limiting factor. The hand-weighted sum
+is.
+
+### The fix
+
+Replace the weighted sum and the four thresholds with a small classifier trained over the
+embedding: 128 inputs to 5 priority levels is 645 learned parameters, about 2.6 KB. The rules that
+remain are the safety floors only — those are guarantees the product makes, not judgements, and
+they should not depend on a model being right.
+
+That deletes the 0.28 base, the 0.34 urgency weight, the 0.30 of sender defaults, the 0.08
+conversation bonus, the category bonuses and all four thresholds. The learned personal model then
+fine-tunes a head that already knows something, instead of starting from zero behind a seven-day
+pilot.
+
+The risk to manage is that the corpus is written by hand, so a head trained on it can learn the
+phrasing rather than the meaning. Training must hold out **whole languages** and score on the
+unseen ones, which is a test the current architecture would fail outright.
+
 ## Ruled out
 
 Researched July 2026; revisit only if the underlying facts change.
