@@ -101,6 +101,10 @@ class PriorityEngine(
     ): Float {
         var score = 0.30f + analysis.urgency * 0.45f
         if (signal.isConversation) score += 0.10f
+        // Regression guard: the keyword analyzer is the only thing running on this path, and it
+        // can still recognise a promotion. Dropping that demotion let a "save 40% today" reach
+        // LOW instead of SILENT, which is the difference between held and not held.
+        if (analysis.category == NotificationCategory.PROMOTION) score -= 0.30f
         memory?.let { score += (it.importanceScore - 0.5f) * 0.20f }
         return score.coerceIn(0f, 1f)
     }

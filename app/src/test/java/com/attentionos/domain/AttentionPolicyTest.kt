@@ -101,24 +101,26 @@ class AttentionPolicyTest {
     }
 
     @Test
-    fun `focus mode queues everything from medium down, and nothing above it`() {
-        // Attention Mode used to achieve this by subtracting 0.17 from the score so MEDIUM items
-        // fell into the LOW band. That reclassified notifications because of a user setting, and
-        // it made HIGH unreachable for a message from an unknown sender — whose ceiling was
-        // 0.850, minus the penalty exactly 0.680, where HIGH begins. Widening the queue band
-        // keeps the restraint and leaves the scale intact.
+    fun `focus mode holds the two bands the model is most reliable about`() {
+        // Narrow on purpose. The classifier is 48% accurate on notifications unlike anything it
+        // was written for, so a wide band silences roughly half of what mattered — the one
+        // failure a user never forgives. A fresh install therefore holds only the SILENT band,
+        // and earns a wider one from that user's own behaviour.
         for (priority in AttentionPriority.entries) {
             val queued = AttentionPolicy.shouldQueue(focusModeEnabled = true, priority = priority)
-            val expected = priority.ordinal >= AttentionPriority.MEDIUM.ordinal
+            val expected = priority.ordinal >= AttentionPriority.LOW.ordinal
             assertEquals("queueing mismatch for $priority", expected, queued)
         }
     }
 
     @Test
-    fun `critical and high are never held back`() {
-        // The point of the mode is calm, not silence. Anything the ladder placed above MEDIUM has
-        // already been judged worth interrupting for.
-        for (priority in listOf(AttentionPriority.CRITICAL, AttentionPriority.HIGH)) {
+    fun `nothing above the junk band is ever held back`() {
+        // The point of the mode is calm, not silence.
+        for (priority in listOf(
+            AttentionPriority.CRITICAL,
+            AttentionPriority.HIGH,
+            AttentionPriority.MEDIUM,
+        )) {
             assertFalse(
                 "$priority must reach the user even in Attention Mode",
                 AttentionPolicy.shouldQueue(focusModeEnabled = true, priority = priority),

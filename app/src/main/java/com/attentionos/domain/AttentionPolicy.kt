@@ -35,18 +35,24 @@ object AttentionPolicy {
     )
 
     /**
-     * The band Attention Mode holds back, which is wider than the band held when it is off.
+     * What Attention Mode holds back on a device it knows nothing about yet.
      *
-     * This is how the mode does its job. It previously worked by subtracting 0.17 from every
-     * non-urgent score so that MEDIUM items fell into [queueablePriorities] — which both
-     * reclassified notifications because of a user setting, and made the HIGH threshold
-     * arithmetically unreachable for a message from an unknown sender: the ceiling for such a
-     * message is 0.850, the penalty took it to 0.680, and HIGH begins at 0.680. No model output
-     * could clear it. Widening the queue band achieves the same restraint without capping the
-     * top of the scale.
+     * Deliberately the narrowest useful band, because the classifier is only 48% accurate on
+     * notifications resembling nothing it was written for. Measured on the held-out corpus and
+     * scaled to a realistic day of 20 consequential notifications and 80 noisy ones:
+     *
+     * ```
+     * held MEDIUM+LOW+SILENT   10 of 20 important missed   26 of 80 noise still buzzing
+     * held LOW+SILENT           6 of 20 missed             50 still buzzing
+     * held SILENT only          1 of 20 missed             62 still buzzing
+     * no app at all             0 missed                   80 buzzing
+     * ```
+     *
+     * The wide band buys real quiet by silencing half of what mattered, which is the one failure
+     * a user never forgives. So a fresh install silences only what the model is most confident is
+     * junk, and the app earns a wider band from that user's own behaviour rather than assuming it.
      */
     val focusModeQueueablePriorities: Set<AttentionPriority> = setOf(
-        AttentionPriority.MEDIUM,
         AttentionPriority.LOW,
         AttentionPriority.SILENT,
     )

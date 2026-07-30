@@ -221,7 +221,9 @@ class CorpusEvaluationTest {
                 context = AttentionContext(focusModeEnabled = true, hourOfDay = 14),
                 memory = null,
             )
-            val prominent = decision.priority.ordinal <= AttentionPriority.HIGH.ordinal
+            // What the user experiences with Attention Mode on: does it make a sound, or is it
+            // held for review? `priority` is an internal label; `shouldQueue` is the behaviour.
+            val prominent = !decision.shouldQueue
             // [reached, must, quietRight, quiet]
             val row = byLang.getOrPut(case.lang) { IntArray(4) }
             if (case.mustReach) {
@@ -271,27 +273,28 @@ class CorpusEvaluationTest {
         const val HELD_OUT_ASSET = "holdout-corpus.json"
 
         /**
-         * First-run figures, never tuned against: 41/85 recall, 34/50 noise rejection.
+         * Scored on the decision a user actually experiences — does Attention Mode let this buzz,
+         * or hold it — rather than on the internal priority label.
          *
-         * The comparison that matters, measured by reverting the decision logic and re-running
-         * this same file:
+         * Which band Attention Mode holds changes the answer completely. Scaled to a realistic
+         * day of 20 consequential notifications and 80 noisy ones:
          *
          * ```
-         *                        own corpus        held out
-         *   weighted sum        71/120  59%      34/85  40%   quiet 40/50  80%
-         *   descriptions       110/120  92%      41/85  48%   quiet 34/50  68%
+         * held band            recall   noise-quiet   important missed   noise buzzing
+         * MEDIUM+LOW+SILENT     48%        68%              10                26
+         * LOW+SILENT            72%        38%               6                50
+         * SILENT only           93%        22%               1                62
+         * no app at all        100%         0%               0                80
          * ```
          *
-         * The 92% was largely self-consistency — the same hand wrote the descriptions and that
-         * corpus. On scenarios nobody wrote a description for, the gain is 8 points of recall
-         * bought with 12 points of noise. That is close to a wash, and it falsifies the claim
-         * that ~50 sentences bound the space: this set alone needed a death in the family, an
-         * urgent blood request, a visa appointment, a meeting starting now, a ride that has
-         * arrived, and an entire informal register ("where r u?? been waiting 20 mins") that
-         * none of them cover.
+         * There is no setting that is both quiet and safe, which is the honest state of the
+         * classifier: 48-93% recall depending only on how much you are willing to silence.
+         * LOW+SILENT is the shipped compromise, and it is a compromise rather than a solution.
+         *
+         * These baselines are first-run figures for that setting and were never tuned against.
          */
-        const val HELD_OUT_RECALL_BASELINE = 41
-        const val HELD_OUT_QUIET_BASELINE = 34
+        const val HELD_OUT_RECALL_BASELINE = 59
+        const val HELD_OUT_QUIET_BASELINE = 18
         const val CORPUS_ASSET = "notification-corpus.json"
 
         /**
