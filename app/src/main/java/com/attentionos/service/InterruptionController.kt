@@ -10,23 +10,53 @@ import android.os.VibratorManager
 import com.attentionos.data.settings.AppSettings
 import com.attentionos.domain.AttentionPriority
 
+/**
+ * What the app should do about a notification, before anything is actually played.
+ *
+ * Separated from the playback so the mapping can be tested. Whether a device makes a sound is the
+ * platform's business; whether an urgent alert was *supposed* to make one is this app's central
+ * promise, and reading the wrong preference would silence it in a way only a user with a missed
+ * alert would ever discover.
+ */
+internal data class InterruptionPlan(
+    val sound: Boolean,
+    val vibration: Boolean,
+) {
+    val silent: Boolean get() = !sound && !vibration
+}
+
+/** The priority-to-preference mapping, as a pure function. */
+internal fun interruptionPlanFor(
+    priority: AttentionPriority,
+    settings: AppSettings,
+): InterruptionPlan = InterruptionPlan(
+    sound = when (priority) {
+        AttentionPriority.CRITICAL -> settings.criticalSound
+        AttentionPriority.HIGH -> settings.highSound
+        AttentionPriority.MEDIUM -> settings.mediumSound
+        // Nothing below MEDIUM may ever make a sound. This is a floor, not a preference: "can
+        // wait" and "quiet" are the two levels whose entire meaning is that they do not.
+        AttentionPriority.LOW, AttentionPriority.SILENT -> false
+    },
+    vibration = when (priority) {
+        AttentionPriority.CRITICAL -> settings.criticalVibration
+        AttentionPriority.HIGH -> settings.highVibration
+        AttentionPriority.MEDIUM -> settings.mediumVibration
+        AttentionPriority.LOW, AttentionPriority.SILENT -> false
+    },
+)
+
+/** Distinct pattern for the top level, so an urgent alert is recognisable without looking. */
+internal fun vibrationPatternFor(priority: AttentionPriority): LongArray = when (priority) {
+    AttentionPriority.CRITICAL -> longArrayOf(0, 180, 90, 240)
+    else -> longArrayOf(0, 160)
+}
+
 class InterruptionController(private val context: Context) {
     fun alert(priority: AttentionPriority, settings: AppSettings) {
-        val sound = when (priority) {
-            AttentionPriority.CRITICAL -> settings.criticalSound
-            AttentionPriority.HIGH -> settings.highSound
-            AttentionPriority.MEDIUM -> settings.mediumSound
-            AttentionPriority.LOW, AttentionPriority.SILENT -> false
-        }
-        val vibration = when (priority) {
-            AttentionPriority.CRITICAL -> settings.criticalVibration
-            AttentionPriority.HIGH -> settings.highVibration
-            AttentionPriority.MEDIUM -> settings.mediumVibration
-            AttentionPriority.LOW, AttentionPriority.SILENT -> false
-        }
-
-        if (sound) playNotificationSound()
-        if (vibration) vibrate(priority)
+        val plan = interruptionPlanFor(priority, settings)
+        if (plan.sound) playNotificationSound()
+        if (plan.vibration) vibrate(priority)
     }
 
     private fun playNotificationSound() {
@@ -42,10 +72,7 @@ class InterruptionController(private val context: Context) {
     }
 
     private fun vibrate(priority: AttentionPriority) {
-        val pattern = when (priority) {
-            AttentionPriority.CRITICAL -> longArrayOf(0, 180, 90, 240)
-            else -> longArrayOf(0, 160)
-        }
+        val pattern = vibrationPatternFor(priority)
         runCatching {
             vibrator()?.vibrate(
                 VibrationEffect.createWaveform(pattern, -1),
