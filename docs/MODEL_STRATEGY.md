@@ -281,6 +281,52 @@ interface and `EncoderAsset` is injectable.
 What should not happen is more descriptions. The held-out number is the one to move, and adding
 sentences tuned against the set they were written for is how the 92% happened in the first place.
 
+## Where this stops, and why
+
+Confidence abstention was tried and removed. Sweeping the margin cutoff:
+
+```
+margin   own corpus              held out
+0.005    109/120 91%  quiet 83%   41/85 48%  quiet 70%
+0.01     108/120 90%  quiet 84%   39/85 46%  quiet 70%
+0.02     107/120 89%  quiet 87%   32/85 38%  quiet 72%
+0.04     102/120 85%  quiet 91%   25/85 29%  quiet 82%
+0.08      88/120 73%  quiet 97%   14/85 16%  quiet 86%
+```
+
+Every point slides along the same trade-off curve. Had the margin carried information about
+correctness, abstaining on thin margins would have improved recall *and* noise rejection at once.
+It improved neither. The similarities are close to uninformative on scenarios no description was
+written for.
+
+That is the ceiling of this approach, measured: **~48% held-out recall.** More descriptions, better
+thresholds and better prompt-style tuning all operate inside it, and the way to appear to beat it is
+to tune against the set you then report — which is exactly how the 92% happened.
+
+### What actually moves it
+
+**A model that can be instructed, not matched.** Worth being precise about the options, because one
+of them is a trap:
+
+- `multilingual-e5-small` at ~145 MB is a *better embedding model*, not an instructable one. It
+  would raise the ceiling and leave the architecture unchanged — still descriptions or a trained
+  head behind it. Probably worth 10-15 points, not a different game.
+- A small generative model at ~300 MB with a cascade is the only option that genuinely removes the
+  description problem: give it the text and a rubric, get a band. The cascade is what keeps it
+  affordable — the cheap encoder handles the obvious majority and only the ambiguous slice pays the
+  460-660 ms. It fails "runs on every phone", which is a product decision rather than a technical
+  one.
+
+**Personalization, which is already built and has never been exercised against real corrections.**
+No cold-start classifier of any size knows that cricket scores do not matter to *this* user while a
+school notice does — that information is not in the notification. The centroid path works from three
+corrections; the gates in front of it (a seven-day pilot and fifty corrections) are far more
+conservative than the mechanism requires, and loosening them is free.
+
+The recommendation is to ship the current cold start, make personalization aggressive, and revisit
+the encoder when there are real correction histories to train and evaluate against. Both remaining
+options are decisions about size and battery that real usage data should settle, not guesses.
+
 ## Ruled out
 
 Researched July 2026; revisit only if the underlying facts change.

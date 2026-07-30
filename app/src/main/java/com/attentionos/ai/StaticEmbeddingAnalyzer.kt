@@ -115,9 +115,14 @@ class StaticEmbeddingAnalyzer(
                 }
             }
 
-            // Urgency is no longer the decision; it is retained because the safety-floor check
-            // and the stored history both read a float. Derived from the winning band plus how
-            // clearly it won, so a confident REACH_NOW reads higher than a marginal one.
+            // How clearly the winner won, used only to shade the urgency number.
+            //
+            // Abstaining on a thin margin was tried and removed. Sweeping the cutoff from 0.005
+            // to 0.08 moved held-out recall 48% -> 16% and noise rejection 70% -> 86%, sliding
+            // along the same trade-off curve at every point. Had the margin carried information
+            // about correctness, abstaining would have improved both at once. It improved
+            // neither, which says the similarities are close to uninformative on scenarios no
+            // description was written for.
             val margin = (bestScore - runnerUp).coerceIn(0f, 0.5f)
             val semanticUrgency = when (bestBand) {
                 AttentionDescriptions.Band.REACH_NOW -> 0.72f + margin
@@ -324,6 +329,7 @@ class StaticEmbeddingAnalyzer(
          * between the urgent and routine prototypes means more. Calibrated on the labelled set.
          */
         const val URGENCY_SPREAD = 1.35f
+
 
         val MAGIC = byteArrayOf('P'.code.toByte(), '2'.code.toByte(), 'V'.code.toByte(), '1'.code.toByte())
 
