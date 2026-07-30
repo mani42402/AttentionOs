@@ -121,8 +121,15 @@ class AttentionNotificationListener : NotificationListenerService() {
         rankingMap: RankingMap,
         reason: Int,
     ) {
+        // REASON_APP_CANCEL is the strongest engagement signal Android gives us and it was being
+        // thrown away. When somebody reads or replies inside WhatsApp, WhatsApp removes its own
+        // notification — the user never taps ours and never swipes it, so neither CLICK nor
+        // CANCEL fires. Every reply the user has ever sent was invisible to the learning.
+        //
+        // We cannot see the reply text, and do not want to. "The sending app withdrew this while
+        // the user was in it" is enough to know they dealt with it.
         val action = when (reason) {
-            REASON_CLICK -> UserAction.OPENED
+            REASON_CLICK, REASON_APP_CANCEL, REASON_APP_CANCEL_ALL -> UserAction.OPENED
             REASON_CANCEL, REASON_CANCEL_ALL -> UserAction.DISMISSED
             else -> return
         }
